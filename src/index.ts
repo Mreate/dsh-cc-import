@@ -1,19 +1,21 @@
 /**
- * CCImport — host half entry.
+ * cc-import — host half entry.
  *
- * Loaded by a composition row `{ id: ccimport, name: 'ccimport' }`.
- * Composes the CLAUDE.md memory loader and the Claude Code import provider,
- * and registers model-facing tools so the import is also drivable from the
- * model (the client UI uses RPC added in the UI milestone).
+ * Loaded by a composition row `{ id: cc-import, name: 'cc-import' }`.
+ * Composes the CLAUDE.md + DSH.md memory loader, the Claude Code import
+ * provider, and the `/init` command that scaffolds a DSH.md; registers
+ * model-facing tools so the import is also drivable from the model (the
+ * client UI uses RPC added in the UI milestone).
  */
 import { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createMemoryLoader } from './memory'
+import { registerInitCommand } from './init'
 import { createClaudeCodeProvider } from './import/claude-code'
 import type { ImportProvider } from './import/provider'
 import { registerRpcRoutes } from './rpc'
 
-export const name = 'ccimport'
+export const name = 'cc-import'
 export const inject = ['systemPrompt', 'sandboxPolicy', 'tools', 'webServer'] as const
 
 const MEMORY_SECTION_ORDER = 50
@@ -42,7 +44,7 @@ export function apply(ctx: Context) {
     return ''
   }
   ctx.systemPrompt.section({
-    name: 'ccimport:claude-md',
+    name: 'cc-import:memory',
     order: MEMORY_SECTION_ORDER,
     text: (assembleCtx: any) => {
       const cwd: string | undefined =
@@ -55,6 +57,9 @@ export function apply(ctx: Context) {
 
   // ---- 2. import providers (extensible) ------------------------------
   const providers: ImportProvider[] = [createClaudeCodeProvider(ctx)]
+
+  // ---- 2b. /init command (scaffold a DSH.md) ---------------------------
+  registerInitCommand(ctx)
 
   // ---- 2b. client-facing HTTP RPC -------------------------------------
   registerRpcRoutes(ctx, providers)

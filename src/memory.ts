@@ -1,15 +1,16 @@
 /**
- * CLAUDE.md memory loader.
+ * 记忆文件加载器（CLAUDE.md + DSH.md）。
  *
- * Implements Claude Code's memory hierarchy (per the official docs):
- *   1. user      ~/.claude/CLAUDE.md
- *   2. project   <workspace>/CLAUDE.md
- *   3. local     <workspace>/CLAUDE.local.md
- *   4. subdir    CLAUDE.md / CLAUDE.local.md under the workspace tree (bounded)
+ * CLAUDE.md 按 Claude Code 官方文档的 memory 层级实现；DSH.md 是本 harness
+ * 对 CLAUDE.md 的同位替代（`/init` 命令生成），按同一套层级加载：
+ *   1. user      ~/.claude/CLAUDE.md   ~/.dsh/DSH.md
+ *   2. project   <workspace>/CLAUDE.md  <workspace>/DSH.md
+ *   3. local     <workspace>/CLAUDE.local.md  <workspace>/DSH.local.md
+ *   4. subdir    CLAUDE.md / CLAUDE.local.md / DSH.md / DSH.local.md（有界）
  *   5. imports   `@path`, `@/path`, `@~/path` inlined recursively
  *
- * Files are emitted in increasing specificity so that later, more-specific
- * instructions override earlier ones when the model reconciles them.
+ * 文件按“越来越具体”的顺序输出：CLAUDE 家族在前、DSH 家族在后，且每家族内
+ * local > project > user、子目录 > 根目录，后加载的更具体指令覆盖先前的冲突。
  */
 import type { Context } from '@deepseek-ai/cordis'
 
@@ -35,6 +36,10 @@ const SKIP_SCAN: Record<string, 1> = {
   '.git': 1, node_modules: 1, dist: 1, build: 1, out: 1, '.next': 1,
   '.cache': 1, coverage: 1, '.venv': 1, venv: 1, __pycache__: 1, '.idea': 1, '.vscode': 1,
 }
+
+/** 每个记忆家族要收集的文件名（前者在家族内更优先）。 */
+const CLAUDE_FILES = ['CLAUDE.md', 'CLAUDE.local.md'] as const
+const DSH_FILES = ['DSH.md', 'DSH.local.md'] as const
 
 export function createMemoryLoader(ctx: Context) {
   const fs = ctx.get('fs') as FsService | undefined
@@ -111,9 +116,10 @@ export function createMemoryLoader(ctx: Context) {
     return out.join('\n')
   }
 
-  async function collectMdFiles(dirPath: string, depth: number, acc: MemoryFile[], opts: MemoryLoaderOptions, seen: Set<string>): Promise<void> {
+  /** 收集一个记忆家族（如 CLAUDE 或 DSH）在目录树下的文件，根优先、子目录在后。 */
+  async function collectFamily(dirPath: string, depth: number, files: readonly string[], acc: MemoryFile[], opts: MemoryLoaderOptions, seen: Set<string>): Promise<void> {
     if (depth > opts.maxSubdirDepth || acc.length >= opts.maxFiles) return
-    for (const fileName of ['CLAUDE.md', 'CLAUDE.local.md']) {
+    for (const fileName of files) {
       const fullPath = `${dirPath}/${fileName}`
       const raw = await readText(fullPath)
       if (raw === undefined) continue
@@ -122,33 +128,43 @@ export function createMemoryLoader(ctx: Context) {
     }
     for (const e of await listDir(dirPath)) {
       if (e.type !== 'directory' || SKIP_SCAN[e.name]) continue
-      await collectMdFiles(`${dirPath}/${e.name}`, depth + 1, acc, opts, seen)
+      await collectFamily(`${dirPath}/${e.name}`, depth + 1, files, acc, opts, seen)
     }
   }
 
-  /** Collect memory files in increasing-specificity order and render them. */
+  /** 收集记忆文件（CLAUDE 家族 → DSH 家族，后加载者优先）并渲染。 */
   async function load(workspaceRoot?: string): Promise<string> {
     if (!fs) return ''
     const opts: MemoryLoaderOptions = { workspaceRoot, homeDir: undefined, maxImportDepth: 4, maxSubdirDepth: 4, maxFiles: 40 }
-    // Home discovery (same strategy as the import provider).
+    // Home discovery：认 .claude（CC）或 .dsh（本 harness）目录。
     const homes: string[] = []
     const SKIP_USER: Record<string, 1> = { Public: 1, Default: 1, 'Default User': 1, 'All Users': 1 }
     async function isDir(p: string) { const s = await statPath(p); return !!(s && s.info.type === 'directory') }
-    async function probe(base: string, name?: string) { const h = name ? `${base}/${name}` : base; if (await isDir(`${h}/.claude`)) homes.push(h) }
+    async function probe(base: string, name?: string) { const h = name ? `${base}/${name}` : base; if (await isDir(`${h}/.claude`) || await isDir(`${h}/.dsh`)) homes.push(h) }
     for (const e of await listDir('C:/Users')) { if (e.type === 'directory' && !SKIP_USER[e.name]) await probe('C:/Users', e.name) }
     for (const base of ['/home', '/Users']) { for (const e of await listDir(base)) { if (e.type === 'directory') await probe(base, e.name) } }
     opts.homeDir = homes[0]
 
     const acc: MemoryFile[] = []
     const seen = new Set<string>()
-    // 1. global user memory
+
+    // 1. 全局 user 记忆（CLAUDE 家族）
     if (opts.homeDir) {
       const p = `${opts.homeDir}/.claude/CLAUDE.md`
       const raw = await readText(p)
       if (raw !== undefined) acc.push({ path: p, content: await expandImports(raw, `${opts.homeDir}/.claude`, opts, 0, seen) })
     }
-    // 2-4. project + local + subdirectories
-    if (opts.workspaceRoot) await collectMdFiles(opts.workspaceRoot, 0, acc, opts, seen)
+    // 2-4. project + local + subdirectories（CLAUDE 家族）
+    if (opts.workspaceRoot) await collectFamily(opts.workspaceRoot, 0, CLAUDE_FILES, acc, opts, seen)
+
+    // 5. 全局 user 记忆（DSH 家族，本 harness 原生）
+    if (opts.homeDir) {
+      const p = `${opts.homeDir}/.dsh/DSH.md`
+      const raw = await readText(p)
+      if (raw !== undefined) acc.push({ path: p, content: await expandImports(raw, `${opts.homeDir}/.dsh`, opts, 0, seen) })
+    }
+    // 6-8. project + local + subdirectories（DSH 家族，后加载 → 优先级更高）
+    if (opts.workspaceRoot) await collectFamily(opts.workspaceRoot, 0, DSH_FILES, acc, opts, seen)
 
     if (!acc.length) return ''
     const blocks = acc.map((f) => `## ${f.path}\n${f.content}`)
@@ -157,3 +173,4 @@ export function createMemoryLoader(ctx: Context) {
 
   return { load }
 }
+
