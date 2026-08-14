@@ -33,9 +33,12 @@ function readBody(req: Req): Promise<string> {
   })
 }
 
-export function registerRpcRoutes(ctx: Context, providers: ImportProvider[]): void {
-  const webServer = ctx.get('webServer') as any
-  if (!webServer) return
+export function registerRpcRoutes(ctx: any, providers: ImportProvider[]): void {
+  const webServer = ctx.webServer
+  if (!webServer) {
+    console.error('[ccimport] webServer service unavailable — HTTP RPC routes not registered')
+    return
+  }
 
   const disposer = webServer.register({
     kind: 'prefix',
@@ -45,8 +48,9 @@ export function registerRpcRoutes(ctx: Context, providers: ImportProvider[]): vo
       const path = url.pathname
       try {
         if (path === '/api/ccimport/list') {
+          const cwd = url.searchParams.get('cwd') || undefined
           const sessions: unknown[] = []
-          for (const p of providers) sessions.push(...(await p.listSessions()))
+          for (const p of providers) sessions.push(...(await p.listSessions(cwd)))
           sendJson(res, 200, { sessions })
           return
         }
@@ -59,7 +63,8 @@ export function registerRpcRoutes(ctx: Context, providers: ImportProvider[]): vo
         if (path === '/api/ccimport/import' && req.method === 'POST') {
           const body = JSON.parse((await readBody(req)) || '{}')
           const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
-          const result = await providers[0].importSession(sessionId)
+          const cwd = typeof body.cwd === 'string' ? body.cwd : undefined
+          const result = await providers[0].importSession(sessionId, cwd)
           sendJson(res, result.error ? 500 : 200, result)
           return
         }

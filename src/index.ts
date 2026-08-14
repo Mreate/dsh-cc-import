@@ -14,7 +14,7 @@ import type { ImportProvider } from './import/provider'
 import { registerRpcRoutes } from './rpc'
 
 export const name = 'ccimport'
-export const inject = ['systemPrompt', 'sandboxPolicy', 'tools'] as const
+export const inject = ['systemPrompt', 'sandboxPolicy', 'tools', 'webServer'] as const
 
 const MEMORY_SECTION_ORDER = 50
 

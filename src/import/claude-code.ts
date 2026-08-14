@@ -90,6 +90,57 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
     return homes.length ? `${homes[0]}/.claude` : undefined
   }
 
+  async function readHead(target: any, maxBytes = 16384): Promise<string> {
+    try {
+      const stream = await fs.streamText(target)
+      let text = ''
+      for await (const chunk of stream) {
+        text += chunk
+        if (text.length >= maxBytes) break
+      }
+      return text.slice(0, maxBytes)
+    } catch {
+      return ''
+    }
+  }
+
+  function extractHeadInfo(text: string): { title?: string; cwd?: string; createdAt?: number } {
+    let title: string | undefined
+    let cwd: string | undefined
+    let createdAt: number | undefined
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue
+      let rec: any
+      try { rec = JSON.parse(line) } catch { continue }
+      if (!rec || typeof rec !== 'object') continue
+      if (cwd === undefined && typeof rec.cwd === 'string') cwd = rec.cwd
+      if (createdAt === undefined && typeof rec.timestamp === 'string') {
+        const t = Date.parse(rec.timestamp)
+        if (!Number.isNaN(t)) createdAt = t
+      }
+      if (title === undefined && rec.isMeta !== true) {
+        if (rec.type === 'ai-title' && typeof rec.aiTitle === 'string') title = rec.aiTitle.trim()
+        else if (rec.type === 'user') {
+          const content = rec.message && typeof rec.message === 'object' ? rec.message.content : undefined
+          const realText = (t: string) => (t.trim() && !t.trimStart().startsWith('<') ? t.trim().slice(0, 200) : undefined)
+          if (typeof content === 'string') {
+            const t = realText(content)
+            if (t) title = t
+          } else if (Array.isArray(content)) {
+            for (const b of content) {
+              if (b && b.type === 'text' && typeof b.text === 'string') {
+                const t = realText(b.text)
+                if (t) { title = t; break }
+              }
+            }
+          }
+        }
+      }
+      if (title !== undefined && cwd !== undefined && createdAt !== undefined) break
+    }
+    return { title, cwd, createdAt }
+  }
+
   async function scanSessions(root: string): Promise<ImportedSessionSummary[]> {
     const out: ImportedSessionSummary[] = []
     async function walk(dir: string, rel: string, depth: number): Promise<void> {
@@ -98,12 +149,16 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         if (out.length >= 500) return
         if (e.type === 'directory') await walk(`${dir}/${e.name}`, `${rel}/${e.name}`, depth + 1)
         else if (e.type === 'file' && typeof e.name === 'string' && e.name.endsWith('.jsonl')) {
+          const info = extractHeadInfo(await readHead(e.target))
           out.push({
             provider: 'claude-code',
             fileName: e.name,
             relPath: `${rel}/${e.name}`.replace(/^\/+/, ''),
             projectDir: rel.replace(/^\/+/, '') || '.',
             size: typeof e.size === 'number' ? Math.floor(e.size) : 0,
+            ...(info.title !== undefined ? { title: info.title } : {}),
+            ...(info.cwd !== undefined ? { cwd: info.cwd } : {}),
+            ...(info.createdAt !== undefined ? { createdAt: info.createdAt } : {}),
           })
         }
       }
@@ -290,10 +345,15 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
 
     discoverDataRoot: () => discoverHome(),
 
-    listSessions: async () => {
+    listSessions: async (cwd?: string) => {
       const root = await discoverHome()
       if (!root) return []
-      return (await scanSessions(root)).filter((s) => !s.relPath.includes('/subagents/'))
+      const all = (await scanSessions(root)).filter((s) => !s.relPath.includes('/subagents/'))
+      if (!cwd) return all
+      // Windows 上大小写与分隔符都可能与工作区规范路径不一致，做容错比较。
+      const norm = (p: string) => p.replace(/[\\/]/g, '\\').toLowerCase()
+      const target = norm(cwd)
+      return all.filter((s) => s.cwd !== undefined && norm(s.cwd) === target)
     },
 
     previewSession: async (sessionId) => {
@@ -308,7 +368,7 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
       return { markdown: recordsToMarkdown(records) }
     },
 
-    importSession: async (sessionId) => {
+    importSession: async (sessionId, cwd?: string) => {
       const empty: ImportResult = { sessionId, eventCount: 0, listed: false }
       if (!fs || !sp) return { ...empty, error: 'fs or sessionPersistence service is unavailable' }
       const root = await discoverHome()
@@ -317,11 +377,34 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
       const match = all.find((s) => !s.relPath.includes('/subagents/') && (s.fileName === sessionId || s.relPath === sessionId || s.fileName.indexOf(sessionId) === 0 || s.relPath.indexOf(sessionId) !== -1))
       if (!match) return { ...empty, error: `Session not found: ${sessionId}` }
 
-      async function importOne(m: ImportedSessionSummary, dshId: string, extraMeta: Record<string, unknown>): Promise<ImportResult> {
-        // Idempotency: a deterministic id means a re-import returns the existing session.
+      /** 把会话附加到目标工作区（workspaceRegistry 归属）。 */
+      async function attachToWorkspace(dshId: string, cwd?: string): Promise<{ attachError?: string }> {
+        if (!cwd) return {}
+        try {
+          const wsr = ctx.get('workspaceRegistry') as any
+          if (wsr && typeof wsr.create === 'function') {
+            const ws = await wsr.create(cwd)
+            if (ws && typeof ws.attachSession === 'function') await ws.attachSession(dshId)
+          }
+        } catch (e: any) {
+          return { attachError: e?.message || String(e) }
+        }
+        return {}
+      }
+
+      async function importOne(m: ImportedSessionSummary, dshId: string, extraMeta: Record<string, unknown>, cwdOverride?: string, attach = false): Promise<ImportResult> {
+        // 幂等：确定性 id 让重复导入直接返回已有会话（仍补一次工作区附加，
+        // 早期版本导入的会话可能还没归属到工作区）。
         try {
           const list = await sp.list()
-          if (list.some((h: any) => h.id === dshId)) return { sessionId: dshId, eventCount: 0, listed: true }
+          if (list.some((h: any) => h.id === dshId)) {
+            const result: ImportResult = { sessionId: dshId, eventCount: 0, listed: true }
+            if (attach) {
+              const att = await attachToWorkspace(dshId, cwdOverride)
+              if (att.attachError) result.attachError = att.attachError
+            }
+            return result
+          }
         } catch { /* list may be unavailable; fall through to create */ }
 
         const raw = await readText(`${root}/projects/${m.relPath}`)
@@ -329,7 +412,7 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         const records = parseRecords(raw)
         if (!records.length) return { sessionId: dshId, eventCount: 0, listed: false, error: 'No parseable user/assistant records' }
         const createdAt = records[0].time || Date.now()
-        const cwd = records.find((r) => r.cwd)?.cwd
+        const cwd = cwdOverride ?? records.find((r) => r.cwd)?.cwd
         const meta = { version: 0, id: dshId, createdAt, ...(cwd ? { cwd } : {}), ...extraMeta }
         const events = synthesize(records, createdAt)
         try {
@@ -345,11 +428,16 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         } catch { /* ignore */ }
         let inspectError: string | undefined
         try { await sp.inspect(dshId) } catch (e: any) { inspectError = e?.message || String(e) }
-        return { sessionId: dshId, eventCount: events.length, listed, ...(inspectError !== undefined ? { inspectError } : {}) }
+        const result: ImportResult = { sessionId: dshId, eventCount: events.length, listed, ...(inspectError !== undefined ? { inspectError } : {}) }
+        if (attach) {
+          const att = await attachToWorkspace(dshId, cwd)
+          if (att.attachError) result.attachError = att.attachError
+        }
+        return result
       }
 
       const mainId = `cc-${match.fileName.replace(/\.jsonl$/, '')}`
-      const mainResult = await importOne(match, mainId, {})
+      const mainResult = await importOne(match, mainId, {}, cwd, true)
 
       // Import sub-agent side-chains as child sessions (parentSession + delegationDepth).
       const mainDir = match.fileName.replace(/\.jsonl$/, '')
@@ -358,7 +446,7 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
       let subagentCount = 0
       for (const sub of subagents) {
         const subId = `cc-${mainDir}-subagent-${sub.fileName.replace(/\.jsonl$/, '')}`
-        const r = await importOne(sub, subId, { parentSession: mainId, delegationDepth: 1, origin: 'subagent' })
+        const r = await importOne(sub, subId, { parentSession: mainId, delegationDepth: 1, origin: 'subagent' }, cwd)
         if (!r.error && r.listed) subagentCount++
       }
       return { ...mainResult, subagentCount }

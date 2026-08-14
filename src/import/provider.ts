@@ -35,6 +35,8 @@ export interface ImportResult {
   error?: string
   /** Number of sub-agent side-chains imported as child sessions. */
   subagentCount?: number
+  /** Non-empty when the session persisted but could not be attached to a workspace group. */
+  attachError?: string
 }
 
 export interface ImportProvider {
@@ -46,13 +48,14 @@ export interface ImportProvider {
 
   /** Locate the product's data root (e.g. `~/.claude`), or undefined. */
   discoverDataRoot(): Promise<string | undefined>
-  /** List importable sessions under the data root. */
-  listSessions(): Promise<ImportedSessionSummary[]>
+  /** List importable sessions under the data root, optionally scoped to one workspace cwd. */
+  listSessions(cwd?: string): Promise<ImportedSessionSummary[]>
   /** Read-only preview of one session as markdown. */
   previewSession(sessionId: string): Promise<{ markdown: string }>
   /**
    * Convert one session into DSH session events and persist it.
+   * `cwd` overrides the imported session's workspace (default: the source cwd).
    * Idempotent: re-importing the same source returns the existing session.
    */
-  importSession(sessionId: string): Promise<ImportResult>
+  importSession(sessionId: string, cwd?: string): Promise<ImportResult>
 }
