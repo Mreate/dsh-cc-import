@@ -6,10 +6,10 @@
  * instead register ordinary HTTP routes on the browser carrier (`webServer`)
  * and let the client half call them with `fetch` — decoupled and simple.
  *
- * Endpoints (all under the `/api/ccimport` prefix):
- *   GET  /api/ccimport/list               -> { sessions: ImportedSessionSummary[] }
- *   GET  /api/ccimport/preview?sessionId= -> { markdown: string }   (read-only)
- *   POST /api/ccimport/import             -> ImportResult           (body: { sessionId })
+ * Endpoints (all under the `/api/cc-import` prefix):
+ *   GET  /api/cc-import/list               -> { sessions: ImportedSessionSummary[] }
+ *   GET  /api/cc-import/preview?sessionId= -> { markdown: string }   (read-only)
+ *   POST /api/cc-import/import             -> ImportResult           (body: { sessionId })
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ImportProvider } from './import/provider'
@@ -42,25 +42,25 @@ export function registerRpcRoutes(ctx: any, providers: ImportProvider[]): void {
 
   const disposer = webServer.register({
     kind: 'prefix',
-    path: '/api/ccimport',
+    path: '/api/cc-import',
     handler: async (req: Req, res: Res) => {
       const url = new URL(req.url || '/', 'http://localhost')
       const path = url.pathname
       try {
-        if (path === '/api/ccimport/list') {
+        if (path === '/api/cc-import/list') {
           const cwd = url.searchParams.get('cwd') || undefined
           const sessions: unknown[] = []
           for (const p of providers) sessions.push(...(await p.listSessions(cwd)))
           sendJson(res, 200, { sessions })
           return
         }
-        if (path === '/api/ccimport/preview') {
+        if (path === '/api/cc-import/preview') {
           const sessionId = url.searchParams.get('sessionId') || ''
           const result = await providers[0].previewSession(sessionId)
           sendJson(res, 200, result)
           return
         }
-        if (path === '/api/ccimport/import' && req.method === 'POST') {
+        if (path === '/api/cc-import/import' && req.method === 'POST') {
           const body = JSON.parse((await readBody(req)) || '{}')
           const sessionId = typeof body.sessionId === 'string' ? body.sessionId : ''
           const cwd = typeof body.cwd === 'string' ? body.cwd : undefined

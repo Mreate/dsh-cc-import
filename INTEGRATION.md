@@ -1,4 +1,4 @@
-# CCImport 接入清单
+# cc-import 接入清单
 
 插件已编译通过（`tsdown` 产出 `lib/index.js` + `lib/client.js` + `.d.ts`）。
 以下是在**全局安装的 DSH**（`npm install -g`，`$DSH_HOME=C:\Users\<you>\.dsh`）里
@@ -31,30 +31,34 @@ dsh plugin --profile web add E:\MessyProject\dsh-plugin\CCImport
 
 ```yaml
 - insert:
-    - id: ccimport
-      name: ccimport
+    - id: cc-import
+      name: cc-import
 ```
 
 > 记忆加载器已改为**按 assembly 的 scope 取会话 cwd**（`src/index.ts`），
-> 所以 host 半放**全局 host composition 即可**，项目级 CLAUDE.md 也能扫对目录。
+> 所以 host 半放**全局 host composition 即可**，项目级 CLAUDE.md/DSH.md 也能扫对目录。
 
 **客户端半**：`dsh.client` 字段自动发现，无需手动接线。
 
 ## 4. 验证
 
 ```powershell
-dsh web --dump-config    # 应出现 ccimport
+dsh web --dump-config    # 应出现 cc-import
 # 重启 dsh
 ```
 
-1. **记忆注入**：`~/.claude/CLAUDE.md` + 会话工作区 `CLAUDE.md`/`CLAUDE.local.md` +
-   子目录 + `@import` 注入系统提示（`<!-- imported: … -->` 内联标记）。
-2. **模型工具**：`cc_history_list`、`cc_import` 出现在工具列表。
-3. **导入**：`cc_import { sessionId }` → `listed=true, inspect=OK`；会话按原 CC 项目 cwd
-   分组，可 resume/回溯；子代理作为子会话导入（`parentSession`+`delegationDepth`+`origin:subagent`）。
-4. **客户端 UI**：侧边栏底部「🅒 导入 Claude Code」→ 浮层列表（CC 图标）→ 预览 → 导入。
-5. **HTTP RPC**：`GET /api/ccimport/list`、`GET /api/ccimport/preview?sessionId=`、
-   `POST /api/ccimport/import` 返回 JSON。
+1. **记忆注入**：`~/.claude/CLAUDE.md` / `~/.dsh/DSH.md` + 会话工作区
+   `CLAUDE.md`/`CLAUDE.local.md`/`DSH.md`/`DSH.local.md` + 子目录 + `@import` 注入系统提示
+   （`<!-- imported: … -->` 内联标记）。
+2. **`/init`**：会话输入框输入 `/init` → 在工作区根创建 DSH.md 起始模板；已存在则不覆盖。
+3. **模型工具**：`cc_history_list`、`cc_import` 出现在工具列表。
+4. **导入**：`cc_import { sessionId }` → `listed=true, inspect=OK`；会话按当前工作区 cwd 归属
+   （`workspaceRegistry.attachSession`），可 resume/回溯；子代理作为子会话导入
+   （`parentSession`+`delegationDepth`+`origin:subagent`）。
+5. **客户端 UI**：侧边栏底部「🅒 导入 Claude Code 对话」→ 浮层列表（CC 图标、标题折叠提示、
+   当前工作区过滤）→ 多选导入 → 全部成功后**立即**出现在当前工作区（无需刷新浏览器）。
+6. **HTTP RPC**：`GET /api/cc-import/list`、`GET /api/cc-import/preview?sessionId=`、
+   `POST /api/cc-import/import` 返回 JSON。
 
 ## 5. 类型说明
 

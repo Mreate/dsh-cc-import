@@ -2,7 +2,7 @@
  * CCImport — client half.
  *
  * Registers an additive sidebar footer entry and a frame-wide overlay picker
- * with MULTI-SELECT + batch import, all through the host's `/api/ccimport`
+ * with MULTI-SELECT + batch import, all through the host's `/api/cc-import`
  * HTTP RPC.
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -121,7 +121,7 @@ function ImportOverlay(props: { useWorkspaces?: any; useSessions?: any; refreshS
     setSelected(new Set())
     setResults([])
     const q = cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''
-    fetch(`/api/ccimport/list${q}`)
+    fetch(`/api/cc-import/list${q}`)
       .then((r) => r.json())
       .then((d) => setSessions(d.sessions || []))
       .catch((e) => setError(String(e)))
@@ -152,7 +152,7 @@ function ImportOverlay(props: { useWorkspaces?: any; useSessions?: any; refreshS
     const msgs: string[] = []
     for (const s of picked) {
       try {
-        const r = await fetch('/api/ccimport/import', {
+        const r = await fetch('/api/cc-import/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: s.fileName, cwd }),
@@ -218,12 +218,12 @@ export function apply(ctx: Context) {
   if (!slots) return
 
   slots.inject('sidebar.footer.action', () => slots.register(
-    { name: 'sidebar.footer.action', id: 'ccimport-import', order: 10, label: '导入 Claude Code 对话' },
+    { name: 'sidebar.footer.action', id: 'cc-import-import', order: 10, label: '导入 Claude Code 对话' },
     (props: any) => React.createElement(FooterButton, { wide: !!props.wide }),
   ))
 
   slots.inject('shell.overlay', () => slots.register(
-    { name: 'shell.overlay', id: 'ccimport-overlay' },
+    { name: 'shell.overlay', id: 'cc-import-overlay' },
     (props: any) => React.createElement(ImportOverlay, {
       useWorkspaces: props.useWorkspaces,
       useSessions: props.useSessions,

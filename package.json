@@ -1,13 +1,13 @@
 {
-  "name": "ccimport",
+  "name": "cc-import",
   "version": "0.1.0",
-  "description": "Import Claude Code memory (CLAUDE.md) and conversation history into DeepSeek Harness as resumable sessions.",
+  "description": "Import Claude Code memory (CLAUDE.md / DSH.md) and conversation history into DeepSeek Harness as resumable sessions.",
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/ccimport.git"
+    "url": "https://github.com/Mreate/dsh-cc-import.git"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -39,7 +39,8 @@
   ],
   "scripts": {
     "bundle": "tsdown && tsdown -c tsdown.client.config.ts",
-    "watch": "tsdown --watch"
+    "watch": "tsdown --watch",
+    "prepublishOnly": "pnpm run bundle"
   },
   "license": "MIT",
   "peerDependencies": {

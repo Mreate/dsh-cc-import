@@ -3,7 +3,7 @@ import { defineConfig } from 'tsdown'
 // The DSH client loader expects a factory-form bundle:
 //   window.__ModuleLoader__.load({ id, factory: (require) => { ... return module.exports } })
 // so the client half is produced as CJS wrapped in that registration, not a plain ESM export.
-const ID = 'ccimport'
+const ID = 'cc-import'
 
 export default defineConfig({
   entry: { client: 'src/client/index.ts' },
