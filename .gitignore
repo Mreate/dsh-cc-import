@@ -1,0 +1,10 @@
+node_modules/
+lib/
+.idea/
+
+dist/
+
+*.tsbuildinfo
+*.iml
+
+.DS_Store
