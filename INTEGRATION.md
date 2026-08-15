@@ -22,19 +22,19 @@ pnpm run bundle       # tsdown → lib/index.js + lib/client.cjs + lib/*.d.ts
 ```powershell
 dsh plugin --profile web add E:\MessyProject\dsh-plugin\CCImport
 ```
-> 会提示「declares no dsh.bundle — installed as a plain dependency」是正常的：
-> 我们走 `cordis.patch.yml` 的 insert 手动挂载，不走 bundle 层。
 
-## 3. 接线（host 半）
+> 本包已声明 `dsh.bundle.patch`，安装完成后 `dsh plugin` 会自动把 `cc-import`
+> 加进 profile 的 `dsh.profile.bundles`；启动时自动叠加本包自带的
+> `cordis.patch.yml`（insert `cc-import` 行）——**无需再手动编辑任何配置文件**。
 
-编辑 `C:\Users\<you>\.dsh\profiles\web\cordis.patch.yml`，把 `[]` 改为：
+## 3. 接线（host 半，自动完成）
 
-```yaml
-- insert:
-    - id: cc-import
-      name: cc-import
-```
+无需手动接线：bundle patch 在启动时自动作为一层 patch 叠加。
 
+> 若你之前按旧方式手动 insert 过 cc-import：升级后请删除
+> `C:\Users\<you>\.dsh\profiles\web\cordis.patch.yml` 里那条 cc-import 的 insert 行，
+> 否则会与 bundle 层重复挂载。
+>
 > 记忆加载器已改为**按 assembly 的 scope 取会话 cwd**（`src/index.ts`），
 > 所以 host 半放**全局 host composition 即可**，项目级 CLAUDE.md/DSH.md 也能扫对目录。
 

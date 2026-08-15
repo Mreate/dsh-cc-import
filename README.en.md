@@ -48,22 +48,11 @@ pnpm install
 pnpm run bundle        # tsdown → lib/index.js + lib/client.cjs
 
 # 2. Install into a DSH profile (web shown here)
-dsh plugin --profile web add <absolute path to this plugin>
-```
-
-> "declares no dsh.bundle — installed as a plain dependency" is expected:
-> this plugin mounts manually via a `cordis.patch.yml` insert, not through the bundle layer.
-
-**Wiring (host half)**: edit `~/.dsh/profiles/web/cordis.patch.yml`:
-
-```yaml
-- insert:
-    - id: cc-import
-      name: cc-import
+dsh plugin --profile web add github:Mreate/dsh-cc-import
 ```
 
 **Client half** is auto-detected and bundled from the `dsh.client` field in `package.json` — no manual wiring.
-After editing the config, restart `dsh web` (the browser page reconnects automatically; refresh the page once
+After installing, restart `dsh web` (the browser page reconnects automatically; refresh the page once
 if the client is still running an old build).
 
 ## UI

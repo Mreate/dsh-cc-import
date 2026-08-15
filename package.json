@@ -24,6 +24,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
@@ -34,9 +37,11 @@
     }
   },
   "files": [
+    "cordis.patch.yml",
     "lib/index.js",
     "lib/client.cjs",
-    "lib/index.d.ts"
+    "lib/index.d.ts",
+    "lib/client.d.cts"
   ],
   "scripts": {
     "bundle": "tsdown && tsdown -c tsdown.client.config.ts",

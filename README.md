@@ -47,22 +47,11 @@ pnpm install
 pnpm run bundle        # tsdown → lib/index.js + lib/client.cjs
 
 # 2. 装进 DSH profile（以 web 为例）
-dsh plugin --profile web add <本插件绝对路径>
-```
-
-> 「declares no dsh.bundle — installed as a plain dependency」是正常的：
-> 本插件走 `cordis.patch.yml` 的 insert 手动挂载，不走 bundle 层。
-
-**接线（host 半）**：编辑 `~/.dsh/profiles/web/cordis.patch.yml`：
-
-```yaml
-- insert:
-    - id: cc-import
-      name: cc-import
+dsh plugin --profile web add github:Mreate/dsh-cc-import
 ```
 
 **客户端半**由 `package.json` 的 `dsh.client` 字段自动发现打包，无需手动接线。
-改完配置后重启 `dsh web`（浏览器页面自动重连，若客户端还是旧版刷新一次页面即可）。
+安装后重启 `dsh web`（浏览器页面自动重连，若客户端还是旧版刷新一次页面即可）。
 
 ## 界面
 

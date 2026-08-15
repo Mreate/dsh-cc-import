@@ -1,0 +1,12 @@
+# cc-import —— host 半的自动接线层（bundle patch）。
+#
+# package.json 声明 `dsh.bundle.patch` 指向本文件后，`dsh plugin add cc-import`
+# 会在安装完成时把本包自动加入 profile 的 `dsh.profile.bundles`；启动时本层
+# 作为一层 patch 自动叠加，等效于用户手动在 cordis.patch.yml 里 insert 这一行，
+# 因此无需再改动任何配置文件。
+#
+# 注意：若你之前按旧方式手动 insert 过 cc-import，升级到 bundle 后请删除
+# profile 的 cordis.patch.yml 里那条重复的 cc-import 行，否则会重复挂载。
+- insert:
+    - id: cc-import
+      name: cc-import
