@@ -208,5 +208,7 @@ interface ImportProvider {
 - **幂等与归档重导**：导入用确定性 id（`cc-<源文件名>`），`sessionPersistence.create` 对重复 id 有三层守卫
   （内存 states/preparations + 磁盘 `loadStored`）。DSH 归档是 **`workspaceRegistry.archivedSessionIds` 集合级隐藏**：
   只从侧边栏视图排除、**不删日志**，`sessionPersistence.list()` 仍返回归档会话——因此仅靠 `list()` 无法区分活跃与归档。
-  插件在短路前查该集合：归档会话重新导入时改用 `cc-<源文件名>-reimport-N` 新 id 新建会话（旧归档会话与日志保持原样），
-  子代理 id 随新主 id 派生（`parentSession` 指向新主会话）。
+  插件在短路前查该集合，**以"该源当前最新会话"（base 或编号最大的 `-reimport-N`）为判断依据**：
+  最新会话活跃 → 幂等短路；最新会话已归档 → 改用 `cc-<源文件名>-reimport-N` 新 id 新建会话
+  （旧归档会话与日志保持原样），子代理 id 随新主 id 派生（`parentSession` 指向新主会话）。
+  ⚠ 不能以 base id 为判断依据：base 被归档后 `list()` 与归档集恒命中，会导致无限重导。

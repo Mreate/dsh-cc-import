@@ -438,24 +438,43 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         }
       }
 
+      /**
+       * 该源当前"最新"的会话 id：base 或编号最大的 `-reimport-N` 中已存在的那个。
+       * 幂等/归档重导的决策必须基于最新会话，而不是基础 id——
+       * 否则原会话被归档后，`taken.has(base)` 与 `archived.has(base)` 恒成立，
+       * 每次导入都会走重新导入分支，导致无限创建 `-reimport-N`（即使最新会话仍活跃）。
+       */
+      function latestSessionId(base: string, taken: Set<string>): string {
+        if (!taken.has(base)) return base
+        let latest = base
+        for (let n = 1; ; n++) {
+          const candidate = `${base}-reimport-${n}`
+          if (!taken.has(candidate)) break
+          latest = candidate
+        }
+        return latest
+      }
+
       async function importOne(m: ImportedSessionSummary, preferredId: string, extraMeta: Record<string, unknown>, cwdOverride?: string, attach = false, archived: Set<string> = new Set()): Promise<ImportResult> {
-        // 幂等 + 归档重导：确定性 id 已存在于持久化里时——
-        //   · 会话仍活跃（未归档）→ 直接返回已有会话（仍补一次工作区附加）；
-        //   · 会话已被归档      → 重新导入为全新会话（`-reimport-N` 新 id），
-        //     旧归档会话与其日志保持原样不动。
+        // 幂等 + 归档重导：以"该源最新会话"为准——
+        //   · 最新会话仍活跃（未归档）→ 直接返回已有会话（仍补一次工作区附加）；
+        //   · 最新会话已被归档      → 重新导入为全新会话（`-reimport-N` 新 id），
+        //     旧归档会话与其日志保持原样不动；
+        //   · 从未导入              → 用确定性 base id 正常导入。
         let dshId = preferredId
         let reimported = false
         try {
           const list = await sp.list()
           const taken = new Set(list.map((h: any) => h.id))
-          if (taken.has(dshId)) {
-            if (archived.has(dshId)) {
+          const latest = latestSessionId(preferredId, taken)
+          if (taken.has(latest)) {
+            if (archived.has(latest)) {
               dshId = nextFreeId(preferredId, taken, archived)
               reimported = true
             } else {
-              const result: ImportResult = { sessionId: dshId, eventCount: 0, listed: true, reimported: false }
+              const result: ImportResult = { sessionId: latest, eventCount: 0, listed: true, reimported: false }
               if (attach) {
-                const att = await attachToWorkspace(dshId, cwdOverride)
+                const att = await attachToWorkspace(latest, cwdOverride)
                 if (att.attachError) result.attachError = att.attachError
               }
               return result
