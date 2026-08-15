@@ -10,7 +10,8 @@
    同时加载本 harness 原生的 DSH.md 家族（`/init` 生成，冲突时优先级更高）。
 2. **高保真对话导入**：把 Claude Code 的 `.jsonl` 会话转换成**可回溯、可 resume 的真实 DSH 会话**（含子代理、附件、时间戳、thinking）。
 3. **侧边栏叠加式入口 + 浮层选择器**：侧边栏底部入口 → 浮层列出 CC 会话（CC 图标标注、只读预览）→「导入此对话」。
-4. **`/init` 命令**：生成 DSH.md 项目记忆文件——Claude Code `/init` 生成 CLAUDE.md 的本 harness 同位替代。
+4. **`/init` 命令**：先让用户选择文档语言，再生成「分析代码库 → 创建 DSH.md」提示词并提交给
+   当前模型（参考 Claude Code 的 `/init` 流程），由模型探索项目并写入 `DSH.md`。
 5. **多 Agent 可扩展**：导入器做成 provider 抽象，CC 是第一个 provider，后续接 Cursor / Codex 等。
 
 ## 2. 架构总览
@@ -21,7 +22,7 @@
 │                                                              │
 │  Host 半（lib/index.js，composition 行加载）                    │
 │   ├─ MemoryLoader   CLAUDE.md + DSH.md 扫描/优先级/@import → systemPrompt.section │
-│   ├─ InitCommand    /init 生成 DSH.md 项目记忆                 │
+│   ├─ InitCommand    /init：语言选择 → 分析提示词 → agent.followup 生成 DSH.md │
 │   ├─ ImportService  CC JSONL → DSH SessionEvent 序列          │
 │   │      └─ ImportProvider 抽象（claude-code 为第一个实现）      │
 │   └─ RPC 方法       供客户端调用（list/preview/import）          │
@@ -181,7 +182,8 @@ interface ImportProvider {
 2. **M2 记忆加载**：CLAUDE.md + DSH.md 完整加载（含 @import、优先级、子目录），动态插件验证后移植 TS。
 3. **M3 导入器**：provider 抽象 + CC JSONL→SessionEvent 映射（先单轮、再高保真），写入 `sessionPersistence` 验证可回溯。
 4. **M4 UI**：footer 入口 + overlay 浮层 + RPC 贯通 + 工作区归属（attach + 客户端基线重拉）。
-5. **M5 /init**：`/init` 命令生成 DSH.md。
+5. **M5 /init**：`/init` 语言选择（`ctx.userQuestions.ask`）+ 分析提示词经 `agent.followup`
+   提交模型，模型生成 DSH.md。
 6. **M6 发布**：README/LICENSE/类型导出/编译产物，端到端实测。
 
 ## 9. 已核实结论（原「待核实」项）
@@ -194,4 +196,6 @@ interface ImportProvider {
 - **侧边栏分组依据**：`WorkspaceView.sessionIds`（workspaceRegistry 注册表归属），不是会话 cwd 匹配；导入必须 `attachSession` 才出现在对应工作区。
 - **客户端工作区信号**：`WorkspaceView.workspaceId`（不是 `id`）；`WorkspaceListState.recentWorkspaceId` 为「最近活跃工作区」，另有 `SessionListState.current` 的 cwd 可作兜底。
 - **立即可见机制**：`host/session-added` 帧仅在创建**live Session** 时发出；冷会话靠 `session.list` 基线（含 cwd 的持久化会话）合并。导入采用「持久化 + attach + 客户端基线重拉」组合，无需 live Session。
-- **`/init`**：DSH 无内置 `/init`，经 `ctx.commands.register` 注册（host 半，客户端 `/` 菜单自动发现）。
+- **`/init`**：DSH 无内置 `/init`，经 `ctx.commands.register` 注册（host 半，客户端 `/` 菜单自动发现）；
+  语言选择走 `ctx.userQuestions.ask`（`dsh-user-questions` 服务，web UI 提供选项弹窗）；
+  提示词作为 user 消息经 `agent.followup`（`dsh-agent-loop`）提交，模型分析后写入文件。

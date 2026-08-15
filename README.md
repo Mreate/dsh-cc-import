@@ -21,8 +21,9 @@
   memory 层级注入 `~/.claude/CLAUDE.md`、`./CLAUDE.md`、`./CLAUDE.local.md`、子目录 CLAUDE.md 与
   `@import` 引用；同时加载本 harness 原生的 **DSH.md 家族**（`./DSH.md`、`./DSH.local.md`、子目录
   DSH.md 与 `@import`），DSH.md 后加载、冲突时优先级更高。
-- **`/init` 命令**：在会话输入框输入 `/init` 即生成 DSH.md 项目记忆文件——Claude Code 的
-  `/init` 生成 CLAUDE.md，本插件是其 **DeepSeek Harness 同位替代**。
+- **`/init` 命令**：输入 `/init` 先选择文档语言（中文 / English，DSH 选项选择 UI），
+  再把「分析代码库 → 创建 DSH.md」的提示词提交给当前模型，由模型探索项目并写入
+  `DSH.md`（参考 Claude Code 的 `/init` 流程；创建结果即时可见）。
 - **对话高保真导入**：把 CC `.jsonl` 会话转换为可回溯、可 resume 的真实 DSH 会话
   （user/assistant 回合、工具调用与结果、thinking → `reasoning`、时间戳、token 用量），
   导入即**附加到当前工作区**，侧边栏**无需刷新浏览器**立即出现。
@@ -86,7 +87,8 @@ dsh plugin --profile web add <本插件绝对路径>
 - **记忆层级**：CLAUDE 家族在前、DSH 家族在后（后者优先）；家族内 `local > project > user`、
   子目录 > 根目录；`@import` 支持 `@path`（相对引用文件所在目录）、`@/path`（工作区根）、
   `@~/path`（用户主目录），可嵌套、去环、深度有界。
-- **`/init` 生成物**：`DSH.md`（项目根，模板含项目说明/结构/常用命令/约定等小节）。
+- **`/init`**：先选语言（中文 / English）→ 生成「分析代码库并创建 DSH.md」提示词并
+  提交给当前模型，由模型探索项目写入 `DSH.md`（已存在则建议改进）。
 - **导入器扩展**：实现 `ImportProvider`（`discoverDataRoot` / `listSessions` / `previewSession` /
   `importSession`），在 `src/index.ts` 注册即可；`claude-code` 是参考实现。
 - **工作区归属**：导入会话自动 `attachSession` 到目标工作区注册表，侧边栏按注册表分组
@@ -99,6 +101,7 @@ dsh profile
   -> dsh-base + dsh-web-app
   -> cc-import Cordis patch
   -> systemPrompt.section（CLAUDE.md + DSH.md 记忆）
+  -> /init 命令（语言选择 → userQuestions → agent.followup → 模型分析生成 DSH.md）
   -> 侧边栏 footer 按钮 + shell.overlay 浮层（客户端半）
   -> /api/cc-import RPC（webServer HTTP 路由）
   -> ImportProvider（CC JSONL 解析 + 事件合成）

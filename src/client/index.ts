@@ -217,6 +217,22 @@ export function apply(ctx: Context) {
   const slots = ctx.get('slots') as any
   if (!slots) return
 
+  // `/init` 等命令的结果在"空白会话"（还没有任何 user/assistant 消息）里不会
+  // 渲染命令卡片（DSH 视其为控制面内容，会话停留在空态 hero）。这里监听
+  // command/executed，把命令结果用 composer 通知通道显示出来——任何会话状态下
+  // 都紧贴输入框可见。
+  ctx.on('command/executed', (sessionId: any, name: any, result: any) => {
+    if (name !== 'init' || !result || typeof result.text !== 'string') return
+    try {
+      const sessions = ctx.get('sessions') as any
+      const scope = typeof sessions?.scope === 'function' ? sessions.scope(sessionId) : undefined
+      const conversation = scope?.get?.('conversation')
+      if (conversation && typeof conversation?.input?.for === 'function') {
+        conversation.input.for(scope).notify(result.kind === 'error' ? 'error' : 'info', result.text)
+      }
+    } catch { /* 通知失败不影响命令本身 */ }
+  })
+
   slots.inject('sidebar.footer.action', () => slots.register(
     { name: 'sidebar.footer.action', id: 'cc-import-import', order: 10, label: '导入 Claude Code 对话' },
     (props: any) => React.createElement(FooterButton, { wide: !!props.wide }),

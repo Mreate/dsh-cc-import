@@ -1,8 +1,8 @@
 /**
  * 记忆文件加载器（CLAUDE.md + DSH.md）。
  *
- * CLAUDE.md 按 Claude Code 官方文档的 memory 层级实现；DSH.md 是本 harness
- * 对 CLAUDE.md 的同位替代（`/init` 命令生成），按同一套层级加载：
+ * CLAUDE.md 按 Claude Code 官方文档的 memory 层级实现；DSH.md 是 DeepSeek
+ * Harness 的项目记忆文件（`/init` 命令生成），按同一套层级加载：
  *   1. user      ~/.claude/CLAUDE.md   ~/.dsh/DSH.md
  *   2. project   <workspace>/CLAUDE.md  <workspace>/DSH.md
  *   3. local     <workspace>/CLAUDE.local.md  <workspace>/DSH.local.md

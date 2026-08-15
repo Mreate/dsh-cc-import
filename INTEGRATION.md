@@ -50,7 +50,9 @@ dsh web --dump-config    # 应出现 cc-import
 1. **记忆注入**：`~/.claude/CLAUDE.md` / `~/.dsh/DSH.md` + 会话工作区
    `CLAUDE.md`/`CLAUDE.local.md`/`DSH.md`/`DSH.local.md` + 子目录 + `@import` 注入系统提示
    （`<!-- imported: … -->` 内联标记）。
-2. **`/init`**：会话输入框输入 `/init` → 在工作区根创建 DSH.md 起始模板；已存在则不覆盖。
+2. **`/init`**：会话输入框输入 `/init` → 弹出语言选择（中文 / English）→ 选择后模型
+   开始分析代码库并生成 DSH.md；输入框旁显示提交结果（空白会话同样可见——DSH 的
+   空白会话不渲染命令卡片）。
 3. **模型工具**：`cc_history_list`、`cc_import` 出现在工具列表。
 4. **导入**：`cc_import { sessionId }` → `listed=true, inspect=OK`；会话按当前工作区 cwd 归属
    （`workspaceRegistry.attachSession`），可 resume/回溯；子代理作为子会话导入

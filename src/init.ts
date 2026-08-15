@@ -1,38 +1,57 @@
 /**
- * `/init` 命令 — 生成 DSH.md 项目记忆文件。
+ * `/init` 命令 — 分析代码库并生成 DSH.md 项目记忆文件。
  *
- * DSH.md 是本 harness 对 Claude Code CLAUDE.md 的同位替代：memory loader
- * 在会话组装时按同一套层级（全局 / 项目 / local / 子目录 / @import）加载它。
- * Claude Code 的 `/init` 生成 CLAUDE.md，本插件的 `/init` 生成 DSH.md。
+ * 参考 Claude Code 的 `/init`：命令先让用户选择文档语言（经 `ctx.userQuestions`
+ * 的 UI 选项通道），然后把"分析代码库 → 创建 DSH.md"的提示词作为 user 消息
+ * 提交给当前会话的模型（`agent.followup`），由模型自行探索并写入文件。
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
-function template(name: string): string {
-  return `# DSH.md — ${name}
+/** 可选语言：label 同时是选项标签与答案值。 */
+const LANGS: Record<string, { instruction: string; prefix: string }> = {
+  中文: {
+    instruction: '使用中文撰写文档内容（代码、命令、路径等原文保留）。',
+    prefix:
+      '# DSH.md\n\n' +
+      '本文件是 DeepSeek Harness（DSH）的项目记忆文件，会话组装时由 cc-import 加载到模型上下文。',
+  },
+  English: {
+    instruction: 'Write the document in English.',
+    prefix:
+      '# DSH.md\n\n' +
+      'This file is the project memory file of DeepSeek Harness (DSH), loaded into the model context by cc-import during session assembly.',
+  },
+}
+const DEFAULT_LANG = 'English'
 
-本文件是 DeepSeek Harness（DSH）的项目记忆文件，等同 Claude Code 的 CLAUDE.md。
-会话组装时由 cc-import 加载到模型上下文（含 DSH.local.md、子目录 DSH.md 与 @import 引用）。
-
-## 项目说明
-
-（一句话说明这个项目做什么。）
-
-## 项目结构
-
-（按需补充关键目录与文件。）
-
-## 常用命令
-
-（按需补充：构建 / 测试 / 运行。）
-
-## 约定与规范
-
-（按需补充：编码风格、提交规范、架构约定。）
-
-## 其他说明
-
-（按需补充。）
-`
+/** 组装 /init 提示词（参考 Claude Code /init 生成的 user prompt）。 */
+function buildPrompt(lang: string, workspace: string): string {
+  const meta = LANGS[lang] ?? LANGS[DEFAULT_LANG]
+  return [
+    'Please analyze this codebase and create a DSH.md file, which will be given to future instances of DeepSeek Harness agents to operate in this repository.',
+    '',
+    `Workspace: ${workspace}`,
+    `Language preference: ${lang} — ${meta.instruction}`,
+    '',
+    'What to add:',
+    '1. Commands that will be commonly used, such as how to build, lint, and run tests. Include the necessary commands to develop in this codebase, such as how to run a single test.',
+    '2. High-level code architecture and structure so that future instances can be productive more quickly. Focus on the "big picture" architecture that requires reading multiple files to understand.',
+    '',
+    'Usage notes:',
+    "- If there's already a DSH.md, suggest improvements to it.",
+    '- When you make the initial DSH.md, do not repeat yourself and do not include obvious instructions like "Provide helpful error messages to users", "Write unit tests for all new utilities", "Never include sensitive information (API keys, tokens) in code or commits".',
+    '- Avoid listing every component or file structure that can be easily discovered.',
+    "- Don't include generic development practices.",
+    '- If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include the important parts.',
+    '- If there is a README.md, make sure to include the important parts.',
+    '- Do not make up information such as "Common Development Tasks", "Tips for Development", "Support and Documentation" unless this is expressly included in other files that you read.',
+    '- Be sure to prefix the file with the following text:',
+    '',
+    '```',
+    meta.prefix,
+    '```',
+  ].join('\n')
 }
 
 /** 注册 `/init` 斜杠命令（host 半；客户端输入框经 commands Remote 自动发现）。 */
@@ -42,33 +61,55 @@ export function registerInitCommand(ctx: Context): void {
 
   ctx.effect(() => commands.register({
     name: 'init',
-    description: '创建 DSH.md 项目记忆文件（本 harness 的 CLAUDE.md 同位替代）',
+    description: '分析代码库并生成 DSH.md 项目记忆文件（先选择文档语言）',
     async handler(invocation: any) {
       const agent = invocation?.agent
       const cwd = agent?.session?.header?.cwd
       if (typeof cwd !== 'string' || !cwd) {
-        return { kind: 'error', text: '无法确定当前工作区（session 无 cwd），未创建 DSH.md。' }
+        return { kind: 'error', text: '无法确定当前工作区（session 无 cwd），无法执行 /init。' }
       }
-      const fs = ctx.get('fs') as any
-      if (!fs || typeof fs.resolve !== 'function' || typeof fs.writeText !== 'function') {
-        return { kind: 'error', text: 'filesystem 服务不可用，未创建 DSH.md。' }
-      }
-      try {
-        const target = await fs.resolve(`${cwd}/DSH.md`)
-        const existing = await fs.stat(target)
-        if (existing && existing.type === 'file') {
-          return { kind: 'success', text: `DSH.md 已存在：${cwd}\\DSH.md（未覆盖，直接编辑即可）。` }
+
+      // 1. 让用户选择文档语言（DSH 的 UI 选项通道；取消/失败则回退默认语言）。
+      let lang = DEFAULT_LANG
+      const uq = ctx.get('userQuestions') as any
+      if (uq && typeof uq.ask === 'function') {
+        try {
+          const answer = await uq.ask({
+            agent,
+            signal: invocation?.signal,
+            questions: [{
+              id: 'lang',
+              header: '/init',
+              question: '请选择生成的 DSH.md 使用哪种语言：',
+              options: Object.keys(LANGS).map((label) => ({ label })),
+            }],
+          })
+          const item = (answer?.answers || []).find((a: any) => a.id === 'lang')
+          const picked = item?.selected?.[0]
+          if (typeof picked === 'string' && LANGS[picked]) lang = picked
+        } catch (e: any) {
+          if (invocation?.signal?.aborted) return { kind: 'error', text: '/init 已取消。' }
+          // 提问通道不可用或被拒：回退默认语言继续。
         }
-        const base = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'project'
-        // 显式 workspace-write 策略：写入只允许落在当前工作区内。
-        await fs.writeText(target, template(base), undefined, undefined, {
-          mode: 'workspace-write',
-          workspaceRoot: cwd,
-          sessionId: agent?.session?.id,
+      }
+
+      // 2. 生成提示词并作为 user 消息提交给模型（模型会自行分析并写入 DSH.md）。
+      try {
+        const prompt = buildPrompt(lang, cwd)
+        const message = createUserMessage({
+          content: [{ type: 'text', text: prompt }],
+          source: { kind: 'user' },
         })
-        return { kind: 'success', text: `已创建 DSH.md：${cwd}\\DSH.md\n（编辑后，下次会话组装时自动载入模型上下文。）` }
+        if (typeof agent?.followup !== 'function') {
+          return { kind: 'error', text: '当前会话的 agent 不可用，无法提交 /init 分析任务。' }
+        }
+        agent.followup(message)
+        return {
+          kind: 'success',
+          text: `已提交 /init 分析任务（语言：${lang}）。模型将探索代码库并生成：${cwd}\\DSH.md`,
+        }
       } catch (e: any) {
-        return { kind: 'error', text: `创建 DSH.md 失败：${e?.message || String(e)}` }
+        return { kind: 'error', text: `提交 /init 分析任务失败：${e?.message || String(e)}` }
       }
     },
   } as any))
