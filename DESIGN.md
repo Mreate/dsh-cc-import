@@ -199,3 +199,10 @@ interface ImportProvider {
 - **`/init`**：DSH 无内置 `/init`，经 `ctx.commands.register` 注册（host 半，客户端 `/` 菜单自动发现）；
   语言选择走 `ctx.userQuestions.ask`（`dsh-user-questions` 服务，web UI 提供选项弹窗）；
   提示词作为 user 消息经 `agent.followup`（`dsh-agent-loop`）提交，模型分析后写入文件。
+  文案本地化：提问题面与结果消息按浏览器语言（客户端经 `/api/cc-import/lang` 上报，默认英文）；
+  命令描述因 `dsh-commands` 要求静态字符串且无更新 API，固定英文。
+- **幂等与归档重导**：导入用确定性 id（`cc-<源文件名>`），`sessionPersistence.create` 对重复 id 有三层守卫
+  （内存 states/preparations + 磁盘 `loadStored`）。DSH 归档是 **`workspaceRegistry.archivedSessionIds` 集合级隐藏**：
+  只从侧边栏视图排除、**不删日志**，`sessionPersistence.list()` 仍返回归档会话——因此仅靠 `list()` 无法区分活跃与归档。
+  插件在短路前查该集合：归档会话重新导入时改用 `cc-<源文件名>-reimport-N` 新 id 新建会话（旧归档会话与日志保持原样），
+  子代理 id 随新主 id 派生（`parentSession` 指向新主会话）。

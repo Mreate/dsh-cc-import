@@ -3,13 +3,13 @@
 <a href="README.md">简体中文</a> · <strong>English</strong>
 
 <p align="center">
-  <a href="https://github.com/Mreate/dsh-cc-import"><img alt="GitHub Repo" src="https://img.shields.io/badge/repo-dsh--cc--import-181717?style=flat-square&logo=github&logoColor=white"></a>
-  <a href="https://github.com/Mreate/dsh-cc-import/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Mreate/dsh-cc-import?style=flat-square&logo=github"></a>
-  <a href="https://github.com/Mreate/dsh-cc-import/forks"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/Mreate/dsh-cc-import?style=flat-square"></a>
-  <a href="https://github.com/Mreate/dsh-cc-import/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Mreate/dsh-cc-import/ci.yml?style=flat-square&label=CI"></a>
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-263146?style=flat-square"></a>
-  <img alt="status" src="https://img.shields.io/badge/status-public%20beta-7da1de?style=flat-square">
-  <img alt="platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness%20Web-4b6fff?style=flat-square">
+  <a href="https://github.com/Mreate/dsh-cc-import"><img alt="GitHub Repo" src="https://img.shields.io/badge/repo-dsh--cc--import-181717?style=flat-square&logo=github&logoColor=white&cacheSeconds=0"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Mreate/dsh-cc-import?style=flat-square&logo=github&cacheSeconds=0"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/forks"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/Mreate/dsh-cc-import?style=flat-square&cacheSeconds=0"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Mreate/dsh-cc-import/ci.yml?style=flat-square&label=CI&cacheSeconds=0"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-263146?style=flat-square&cacheSeconds=0"></a>
+  <img alt="status" src="https://img.shields.io/badge/status-public%20beta-7da1de?style=flat-square&cacheSeconds=0">
+  <img alt="platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness%20Web-4b6fff?style=flat-square&cacheSeconds=0">
 </p>
 
 > Migrate Claude Code memories and conversations into DeepSeek Harness (DSH): CLAUDE.md / DSH.md memory loading,
@@ -28,8 +28,7 @@
   explores the project and writes `DSH.md` (mirrors Claude Code's `/init` flow; the result is visible immediately).
 - **High-fidelity conversation import**: Converts CC `.jsonl` sessions into real, resumable DSH sessions
   (user/assistant turns, tool calls and results, thinking → `reasoning`, timestamps, token usage).
-  Imported sessions are **attached to the current workspace** and appear in the sidebar **immediately,
-  no browser refresh required**.
+  Imported sessions are **attached to the current workspace** and appear in the sidebar.
 - **Sub-agent import**: CC sub-agent side chains (`<session>/subagents/*.jsonl`) are imported as child sessions
   (`parentSession` + `delegationDepth` + `origin: 'subagent'`).
 - **Extensible**: Importers implement the `ImportProvider` interface (`src/import/provider.ts`);
@@ -78,6 +77,13 @@ A "🅒 Import Claude Code conversations" entry is added to the sidebar footer (
 | Batch import | "Import selected (N)" → per-item results (✓/✗ + event count + sub-agent count) → auto-closes on full success |
 | List filtering | Only CC sessions matching the **current workspace** cwd are shown (Windows case/separator tolerant) |
 
+## Screenshots
+
+| Feature              | Screenshot                           |
+|----------------------|--------------------------------------|
+| Import session UI    | ![Import overlay](image/Example.png) |
+| /init command        | ![init command](image/Init.png)      |
+
 ## Documentation
 
 | Topic | Content |
@@ -97,7 +103,7 @@ A "🅒 Import Claude Code conversations" entry is added to the sidebar footer (
 - **Extending importers**: implement `ImportProvider` (`discoverDataRoot` / `listSessions` / `previewSession` /
   `importSession`) and register it in `src/index.ts`; `claude-code` is the reference implementation.
 - **Workspace ownership**: imported sessions are `attachSession`-ed to the target workspace registry, so the
-  sidebar groups them under the matching workspace immediately (instead of "Uncategorized").
+  sidebar groups them under the matching workspace immediately.
 
 ## How It Works
 
@@ -126,7 +132,8 @@ resume, traceback, tool execution, compaction and persistence remain owned by DS
   `step/end` → `turn/end`); `seq` is 0-based and contiguous, `time` keeps the source timestamps, surface events
   carry `surfaceOp: 'append'`, and `data` is lossless JSON.
 - **Idempotent import**: a deterministic session id (`cc-<source file name>`) makes repeated imports return
-  the existing session.
+  the existing session; sessions archived in DSH can still be re-imported — a fresh session is created under
+  `cc-<source file name>-reimport-N` while the archived one is left untouched.
 - **Immediately visible**: after import the host fires a `host/workspace-changed` frame and the client re-fetches
   the `session.list` baseline, so the session appears in the current workspace right away — no DSH restart or
   browser refresh.

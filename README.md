@@ -3,13 +3,13 @@
 <strong>简体中文</strong> · <a href="README.en.md">English</a>
 
 <p align="center">
-  <a href="https://github.com/Mreate/dsh-cc-import"><img alt="GitHub Repo" src="https://img.shields.io/badge/repo-dsh--cc--import-181717?style=flat-square&logo=github&logoColor=white"></a>
-  <a href="https://github.com/Mreate/dsh-cc-import/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Mreate/dsh-cc-import?style=flat-square&logo=github"></a>
-  <a href="https://github.com/Mreate/dsh-cc-import/forks"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/Mreate/dsh-cc-import?style=flat-square"></a>
-  <a href="https://github.com/Mreate/dsh-cc-import/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Mreate/dsh-cc-import/ci.yml?style=flat-square&label=CI"></a>
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-263146?style=flat-square"></a>
-  <img alt="status" src="https://img.shields.io/badge/status-public%20beta-7da1de?style=flat-square">
-  <img alt="platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness%20Web-4b6fff?style=flat-square">
+  <a href="https://github.com/Mreate/dsh-cc-import"><img alt="GitHub Repo" src="https://img.shields.io/badge/repo-dsh--cc--import-181717?style=flat-square&logo=github&logoColor=white&cacheSeconds=0"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Mreate/dsh-cc-import?style=flat-square&logo=github&cacheSeconds=0"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/forks"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/Mreate/dsh-cc-import?style=flat-square&cacheSeconds=0"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Mreate/dsh-cc-import/ci.yml?style=flat-square&label=CI&cacheSeconds=0"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-263146?style=flat-square&cacheSeconds=0"></a>
+  <img alt="status" src="https://img.shields.io/badge/status-public%20beta-7da1de?style=flat-square&cacheSeconds=0">
+  <img alt="platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness%20Web-4b6fff?style=flat-square&cacheSeconds=0">
 </p>
 
 > 把 Claude Code 的记忆与对话迁移进 DeepSeek Harness（DSH）：CLAUDE.md / DSH.md 记忆加载、
@@ -27,7 +27,7 @@
   `DSH.md`（参考 Claude Code 的 `/init` 流程；创建结果即时可见）。
 - **对话高保真导入**：把 CC `.jsonl` 会话转换为可回溯、可 resume 的真实 DSH 会话
   （user/assistant 回合、工具调用与结果、thinking → `reasoning`、时间戳、token 用量），
-  导入即**附加到当前工作区**，侧边栏**无需刷新浏览器**立即出现。
+  导入即**附加到当前工作区**。
 - **子代理导入**：CC 子代理侧链（`<会话>/subagents/*.jsonl`）作为子会话导入
   （`parentSession` + `delegationDepth` + `origin: 'subagent'`）。
 - **可扩展**：导入器实现 `ImportProvider` 接口（`src/import/provider.ts`），
@@ -75,6 +75,13 @@ dsh plugin --profile web add <本插件绝对路径>
 | 批量导入 | 「导入选中（N）」→ 逐条结果（✓/✗ + 事件数 + 子代理数）→ 全部成功自动关闭浮层 |
 | 列表过滤 | 只显示**当前工作区** cwd 匹配的 CC 会话（Windows 大小写/分隔符容错） |
 
+## 效果截图
+
+| 功能       | 截图                          |
+|----------|-----------------------------|
+| 导入对话 UI  | ![导入浮层](image/Example.png)  |
+| /init 指令 | ![init指令](image/Init.png)   |
+
 ## 文档
 
 | 主题 | 内容 |
@@ -93,7 +100,7 @@ dsh plugin --profile web add <本插件绝对路径>
 - **导入器扩展**：实现 `ImportProvider`（`discoverDataRoot` / `listSessions` / `previewSession` /
   `importSession`），在 `src/index.ts` 注册即可；`claude-code` 是参考实现。
 - **工作区归属**：导入会话自动 `attachSession` 到目标工作区注册表，侧边栏按注册表分组
-  立即出现在对应工作区下（而非「未分组」）。
+  立即出现在对应工作区下。
 
 ## 工作方式
 
@@ -121,7 +128,8 @@ dsh profile
   （`turn/start` → `user/message` → `step/start` → `assistant/message` →
   `tool/call` → `tool/result` → `step/end` → `turn/end`），`seq` 0 基连续、
   `time` 沿用源时间戳、surface 事件带 `surfaceOp: 'append'`、`data` 为 lossless JSON。
-- **幂等导入**：确定性会话 id（`cc-<源文件名>`）让重复导入直接返回已有会话。
+- **幂等导入**：确定性会话 id（`cc-<源文件名>`）让重复导入直接返回已有会话；
+  会话被 DSH 归档后仍可重新导入——自动以 `cc-<源文件名>-reimport-N` 新建会话，原归档会话保留。
 - **立即可见**：导入后 host 触发 `host/workspace-changed` 帧 + 客户端 `session.list`
   基线重拉，会话立刻出现在当前工作区，无需重启 DSH 或刷新浏览器。
 - **Windows 路径容错**：cwd 过滤做大小写 / 分隔符归一化。

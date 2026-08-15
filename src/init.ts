@@ -4,9 +4,15 @@
  * 参考 Claude Code 的 `/init`：命令先让用户选择文档语言（经 `ctx.userQuestions`
  * 的 UI 选项通道），然后把"分析代码库 → 创建 DSH.md"的提示词作为 user 消息
  * 提交给当前会话的模型（`agent.followup`），由模型自行探索并写入文件。
+ *
+ * 本地化策略（浏览器语言，host 经 /api/cc-import/lang 获知，默认英文）：
+ *   - 提问题面与结果消息：运行时取 `getUiLang()`，浏览器为中文则中文、否则英文；
+ *   - 命令描述：dsh-commands 要求 description 为注册时固定的静态字符串（无更新
+ *     API、客户端 remote 只读），无法按浏览器语言展示，因此固定用英文。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { getUiLang, type UiLang } from './ui-lang'
 
 /** 可选语言：label 同时是选项标签与答案值。 */
 const LANGS: Record<string, { instruction: string; prefix: string }> = {
@@ -24,6 +30,33 @@ const LANGS: Record<string, { instruction: string; prefix: string }> = {
   },
 }
 const DEFAULT_LANG = 'English'
+
+/** /init 的 UI 文案（提问 + 结果消息），按浏览器语言选择。 */
+const UI: Record<UiLang, {
+  question: string
+  noCwd: string
+  cancelled: string
+  agentUnavailable: string
+  submitted: (lang: string, path: string) => string
+  submitFailed: (msg: string) => string
+}> = {
+  en: {
+    question: 'Please choose the language for the generated DSH.md:',
+    noCwd: 'Cannot determine the current workspace (session has no cwd), cannot run /init.',
+    cancelled: '/init cancelled.',
+    agentUnavailable: 'The current session agent is unavailable; cannot submit the /init analysis task.',
+    submitted: (lang, path) => `Submitted /init analysis task (language: ${lang}). The model will explore the codebase and generate: ${path}`,
+    submitFailed: (msg) => `Failed to submit /init analysis task: ${msg}`,
+  },
+  zh: {
+    question: '请选择生成的 DSH.md 使用哪种语言：',
+    noCwd: '无法确定当前工作区（session 无 cwd），无法执行 /init。',
+    cancelled: '/init 已取消。',
+    agentUnavailable: '当前会话的 agent 不可用，无法提交 /init 分析任务。',
+    submitted: (lang, path) => `已提交 /init 分析任务（语言：${lang}）。模型将探索代码库并生成：${path}`,
+    submitFailed: (msg) => `提交 /init 分析任务失败：${msg}`,
+  },
+}
 
 /** 组装 /init 提示词（参考 Claude Code /init 生成的 user prompt）。 */
 function buildPrompt(lang: string, workspace: string): string {
@@ -61,12 +94,14 @@ export function registerInitCommand(ctx: Context): void {
 
   ctx.effect(() => commands.register({
     name: 'init',
-    description: '分析代码库并生成 DSH.md 项目记忆文件（先选择文档语言）',
+    // 描述固定英文：dsh-commands 要求静态字符串且无更新 API（见文件头注释）。
+    description: 'Analyze the codebase and generate a DSH.md project memory file (pick the document language first)',
     async handler(invocation: any) {
+      const ui = UI[getUiLang()]
       const agent = invocation?.agent
       const cwd = agent?.session?.header?.cwd
       if (typeof cwd !== 'string' || !cwd) {
-        return { kind: 'error', text: '无法确定当前工作区（session 无 cwd），无法执行 /init。' }
+        return { kind: 'error', text: ui.noCwd }
       }
 
       // 1. 让用户选择文档语言（DSH 的 UI 选项通道；取消/失败则回退默认语言）。
@@ -80,7 +115,7 @@ export function registerInitCommand(ctx: Context): void {
             questions: [{
               id: 'lang',
               header: '/init',
-              question: '请选择生成的 DSH.md 使用哪种语言：',
+              question: ui.question,
               options: Object.keys(LANGS).map((label) => ({ label })),
             }],
           })
@@ -88,7 +123,7 @@ export function registerInitCommand(ctx: Context): void {
           const picked = item?.selected?.[0]
           if (typeof picked === 'string' && LANGS[picked]) lang = picked
         } catch (e: any) {
-          if (invocation?.signal?.aborted) return { kind: 'error', text: '/init 已取消。' }
+          if (invocation?.signal?.aborted) return { kind: 'error', text: ui.cancelled }
           // 提问通道不可用或被拒：回退默认语言继续。
         }
       }
@@ -101,15 +136,15 @@ export function registerInitCommand(ctx: Context): void {
           source: { kind: 'user' },
         })
         if (typeof agent?.followup !== 'function') {
-          return { kind: 'error', text: '当前会话的 agent 不可用，无法提交 /init 分析任务。' }
+          return { kind: 'error', text: ui.agentUnavailable }
         }
         agent.followup(message)
         return {
           kind: 'success',
-          text: `已提交 /init 分析任务（语言：${lang}）。模型将探索代码库并生成：${cwd}\\DSH.md`,
+          text: ui.submitted(lang, `${cwd}\\DSH.md`),
         }
       } catch (e: any) {
-        return { kind: 'error', text: `提交 /init 分析任务失败：${e?.message || String(e)}` }
+        return { kind: 'error', text: ui.submitFailed(e?.message || String(e)) }
       }
     },
   } as any))

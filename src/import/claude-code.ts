@@ -397,18 +397,53 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         return {}
       }
 
-      async function importOne(m: ImportedSessionSummary, dshId: string, extraMeta: Record<string, unknown>, cwdOverride?: string, attach = false): Promise<ImportResult> {
-        // 幂等：确定性 id 让重复导入直接返回已有会话（仍补一次工作区附加，
-        // 早期版本导入的会话可能还没归属到工作区）。
+      /**
+       * 读取 DSH 的全局归档集合（workspaceRegistry.archivedSessionIds）。
+       * DSH 归档只是把会话 id 记入该集合并从侧边栏视图隐藏，持久化日志
+       * 与 sessionPersistence 都保留——所以仅靠 sp.list() 无法区分"活跃"与
+       * "已归档"，必须查这个集合。registry 不可用时视为无归档。
+       */
+      async function archivedIds(): Promise<Set<string>> {
+        try {
+          const wsr = ctx.get('workspaceRegistry') as any
+          const ids = wsr?.archivedSessionIds
+          if (Array.isArray(ids)) return new Set(ids as string[])
+        } catch { /* registry 不可用 → 无归档 */ }
+        return new Set()
+      }
+
+      /** 为重新导入分配一个未被占用（含归档集）的 `-reimport-N` id。 */
+      function nextFreeId(base: string, taken: Set<string>, archived: Set<string>): string {
+        let n = 1
+        for (;;) {
+          const candidate = `${base}-reimport-${n}`
+          if (!taken.has(candidate) && !archived.has(candidate)) return candidate
+          n++
+        }
+      }
+
+      async function importOne(m: ImportedSessionSummary, preferredId: string, extraMeta: Record<string, unknown>, cwdOverride?: string, attach = false, archived: Set<string> = new Set()): Promise<ImportResult> {
+        // 幂等 + 归档重导：确定性 id 已存在于持久化里时——
+        //   · 会话仍活跃（未归档）→ 直接返回已有会话（仍补一次工作区附加）；
+        //   · 会话已被归档      → 重新导入为全新会话（`-reimport-N` 新 id），
+        //     旧归档会话与其日志保持原样不动。
+        let dshId = preferredId
+        let reimported = false
         try {
           const list = await sp.list()
-          if (list.some((h: any) => h.id === dshId)) {
-            const result: ImportResult = { sessionId: dshId, eventCount: 0, listed: true }
-            if (attach) {
-              const att = await attachToWorkspace(dshId, cwdOverride)
-              if (att.attachError) result.attachError = att.attachError
+          const taken = new Set(list.map((h: any) => h.id))
+          if (taken.has(dshId)) {
+            if (archived.has(dshId)) {
+              dshId = nextFreeId(preferredId, taken, archived)
+              reimported = true
+            } else {
+              const result: ImportResult = { sessionId: dshId, eventCount: 0, listed: true, reimported: false }
+              if (attach) {
+                const att = await attachToWorkspace(dshId, cwdOverride)
+                if (att.attachError) result.attachError = att.attachError
+              }
+              return result
             }
-            return result
           }
         } catch { /* list may be unavailable; fall through to create */ }
 
@@ -433,7 +468,7 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         } catch { /* ignore */ }
         let inspectError: string | undefined
         try { await sp.inspect(dshId) } catch (e: any) { inspectError = e?.message || String(e) }
-        const result: ImportResult = { sessionId: dshId, eventCount: events.length, listed, ...(inspectError !== undefined ? { inspectError } : {}) }
+        const result: ImportResult = { sessionId: dshId, eventCount: events.length, listed, reimported, ...(inspectError !== undefined ? { inspectError } : {}) }
         if (attach) {
           const att = await attachToWorkspace(dshId, cwd)
           if (att.attachError) result.attachError = att.attachError
@@ -441,17 +476,20 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         return result
       }
 
-      const mainId = `cc-${match.fileName.replace(/\.jsonl$/, '')}`
-      const mainResult = await importOne(match, mainId, {}, cwd, true)
+      const archived = await archivedIds()
+      // 主会话：优先确定性 id（cc-<源文件名>）；若已被归档则重新导入为 `-reimport-N`。
+      const mainResult = await importOne(match, `cc-${match.fileName.replace(/\.jsonl$/, '')}`, {}, cwd, true, archived)
+      const mainId = mainResult.sessionId
 
-      // Import sub-agent side-chains as child sessions (parentSession + delegationDepth).
-      const mainDir = match.fileName.replace(/\.jsonl$/, '')
-      const subPrefix = `${mainDir}/subagents/`
+      // 子代理侧链：以主会话实际 id 派生（重新导入时同步换新 id），
+      // parentSession 指向重新导入后的主会话 id。
+      const mainBase = mainId.replace(/^cc-/, '')
+      const subPrefix = `${match.fileName.replace(/\.jsonl$/, '')}/subagents/`
       const subagents = all.filter((s) => s.relPath.startsWith(subPrefix))
       let subagentCount = 0
       for (const sub of subagents) {
-        const subId = `cc-${mainDir}-subagent-${sub.fileName.replace(/\.jsonl$/, '')}`
-        const r = await importOne(sub, subId, { parentSession: mainId, delegationDepth: 1, origin: 'subagent' }, cwd)
+        const subId = `cc-${mainBase}-subagent-${sub.fileName.replace(/\.jsonl$/, '')}`
+        const r = await importOne(sub, subId, { parentSession: mainId, delegationDepth: 1, origin: 'subagent' }, cwd, false, archived)
         if (!r.error && r.listed) subagentCount++
       }
       return { ...mainResult, subagentCount }

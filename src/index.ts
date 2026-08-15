@@ -153,12 +153,13 @@ export function apply(ctx: Context) {
           inspectError: { type: 'string' },
           error: { type: 'string' },
           subagentCount: { type: 'integer' },
+          reimported: { type: 'boolean' },
         },
       },
       render: (_args, value) => {
         const text = value.error
           ? `Import failed: ${value.error}`
-          : `Imported ${value.sessionId} (${value.eventCount} events). listed=${value.listed}${value.inspectError ? ` inspectError=${value.inspectError}` : ' inspect=OK'}`
+          : `Imported ${value.sessionId} (${value.eventCount} events). listed=${value.listed}${value.reimported ? ' [re-imported: prior session was archived]' : ''}${value.inspectError ? ` inspectError=${value.inspectError}` : ' inspect=OK'}`
         return [{ type: 'text', text }]
       },
     },

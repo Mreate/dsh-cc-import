@@ -37,6 +37,12 @@ export interface ImportResult {
   subagentCount?: number
   /** Non-empty when the session persisted but could not be attached to a workspace group. */
   attachError?: string
+  /**
+   * True when the source had been imported before and that session was later
+   * archived in DSH, so a fresh session was created under a new `-reimport-N`
+   * id (the archived session itself is left untouched).
+   */
+  reimported?: boolean
 }
 
 export interface ImportProvider {

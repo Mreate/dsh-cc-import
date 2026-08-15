@@ -10,9 +10,12 @@
  *   GET  /api/cc-import/list                 -> { sessions: ImportedSessionSummary[] }
  *   GET  /api/cc-import/preview?sessionId=&provider= -> { markdown: string }  (read-only)
  *   POST /api/cc-import/import               -> ImportResult           (body: { sessionId, cwd?, provider? })
+ *   GET/POST /api/cc-import/lang             -> { lang: 'en'|'zh' }     (body: { lang?: string })
+ *                                            客户端页面加载时上报浏览器语言，host 缓存后用于 /init 等文案本地化。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ImportProvider } from './import/provider'
+import { getUiLang, setUiLang } from './ui-lang'
 
 type Req = any
 type Res = any
@@ -91,6 +94,14 @@ export function registerRpcRoutes(ctx: any, providers: ImportProvider[]): void {
           const cwd = typeof body.cwd === 'string' ? body.cwd : undefined
           const result = await provider.importSession(sessionId, cwd)
           sendJson(res, result.error ? 500 : 200, result)
+          return
+        }
+        if (path === '/api/cc-import/lang') {
+          if (req.method === 'POST') {
+            const body = JSON.parse((await readBody(req)) || '{}')
+            setUiLang(typeof body.lang === 'string' ? body.lang : undefined)
+          }
+          sendJson(res, 200, { lang: getUiLang() })
           return
         }
         sendJson(res, 404, { error: 'not found' })

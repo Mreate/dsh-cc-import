@@ -35,6 +35,7 @@ interface Strings {
   foldedSuffix: (n: number) => string
   subagentsSuffix: (n: number) => string
   attachErrorSuffix: (e: string) => string
+  reimportedSuffix: () => string
   okImport: (sessionId: string, eventCount: number, extra: string) => string
   failImport: (file: string, error: string) => string
 }
@@ -53,6 +54,7 @@ const STRINGS: Record<Lang, Strings> = {
     foldedSuffix: (n) => `(${n}字已折叠)`,
     subagentsSuffix: (n) => `，${n} 子代理`,
     attachErrorSuffix: (e) => `，附加失败：${e}`,
+    reimportedSuffix: () => '，重新导入（原会话已归档）',
     okImport: (sessionId, eventCount, extra) => `✓ ${sessionId}（${eventCount} 事件${extra}）`,
     failImport: (file, error) => `✗ ${file}: ${error}`,
   },
@@ -69,6 +71,7 @@ const STRINGS: Record<Lang, Strings> = {
     foldedSuffix: (n) => `(${n} chars folded)`,
     subagentsSuffix: (n) => `, ${n} sub-agents`,
     attachErrorSuffix: (e) => `, attach failed: ${e}`,
+    reimportedSuffix: () => ', re-imported (prior session was archived)',
     okImport: (sessionId, eventCount, extra) => `✓ ${sessionId} (${eventCount} events${extra})`,
     failImport: (file, error) => `✗ ${file}: ${error}`,
   },
@@ -85,6 +88,18 @@ function detectLang(): Lang {
 
 function getStrings(): Strings {
   return STRINGS[detectLang()]
+}
+
+/** 把浏览器语言上报给 host（fire-and-forget；失败静默，host 默认英文）。 */
+function reportBrowserLang() {
+  try {
+    const lang = typeof navigator !== 'undefined' ? navigator.language || '' : ''
+    fetch('/api/cc-import/lang', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lang }),
+    }).catch(() => { /* 忽略 */ })
+  } catch { /* 忽略 */ }
 }
 
 // ---- 页面级单例状态：footer 按钮与浮层是两个独立 slot，经此共享开关 ---------
@@ -250,6 +265,7 @@ function ImportOverlay(props: { useWorkspaces?: any; useSessions?: any; refreshS
         if (d.error) msgs.push(t.failImport(s.fileName, d.error))
         else {
           const extra =
+            (d.reimported ? t.reimportedSuffix() : '') +
             (d.subagentCount ? t.subagentsSuffix(d.subagentCount) : '') +
             (d.attachError ? t.attachErrorSuffix(d.attachError) : '')
           msgs.push(t.okImport(d.sessionId, d.eventCount, extra))
@@ -310,6 +326,10 @@ function ImportOverlay(props: { useWorkspaces?: any; useSessions?: any; refreshS
 export function apply(ctx: Context) {
   const slots = ctx.get('slots') as any
   if (!slots) return
+
+  // 页面加载时把浏览器语言上报给 host（/init 提问题面等文案本地化用）。
+  // host 侧命令描述是注册时固定的静态字符串，无法随之改变（见 src/init.ts）。
+  reportBrowserLang()
 
   // `/init` 等命令的结果在"空白会话"（还没有任何 user/assistant 消息）里不会
   // 渲染命令卡片（DSH 视其为控制面内容，会话停留在空态 hero）。这里监听
