@@ -84,9 +84,10 @@ cc-import/
   `context()` 随附循环成为带来源的 user-role runtime-context 快照，与系统提示词
   分离（不污染系统提示词 KV 缓存、不稀释其权威性，切换 cwd 后新快照取代旧快照）。
 - **CLAUDE 家族在前、DSH 家族在后**（DSH.md 是本 harness 原生记忆，`/init` 生成，冲突时覆盖 CLAUDE.md）；
-  家族内 `local > project > user`、子目录 > 根目录。
-- 全局 + project + local 在 session 启动时读入；subdir 采用「按需」策略：随 `fs/observed` 或工作区扫描有界加载
-  （原型先做有界深度扫描，跳过 `node_modules`/`.git` 等）。
+  家族内 `local > project > user`。
+- 全局 user + project + local 在 session 启动时**读入全文**；subdir 只做**有界路径索引**
+  （跳过 `node_modules`/`.git` 等，深度 ≤ 4、路径 ≤ 64），不内联全文——模型进入该子树时用
+  read 工具按需读取，贴近 CC 的「进入子目录才加载」，避免几十个文件撑爆上下文。
 - `@import` 解析：`@/x` → workspace 根；`@~/x` → home；`@x` → 引用文件所在目录；深度 ≤ N、路径去环。
 - 优先级合并：同 key 的指令，更具体层（local > project > user）覆盖。
 

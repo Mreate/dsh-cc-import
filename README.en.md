@@ -20,9 +20,10 @@
 ## Core Features
 
 - **Memory loading (CLAUDE.md + DSH.md)**: Injects `~/.claude/CLAUDE.md`, `./CLAUDE.md`, `./CLAUDE.local.md`,
-  subdirectory CLAUDE.md files and `@import` references following the [Claude Code official docs](https://code.claude.com/docs)
-  memory hierarchy; also loads this harness's native **DSH.md family** (`./DSH.md`, `./DSH.local.md`,
-  subdirectory DSH.md and `@import`). DSH.md loads later and takes priority on conflicts.
+  subdirectory CLAUDE.md files (path index, read on demand) and `@import` references following the
+  [Claude Code official docs](https://code.claude.com/docs) memory hierarchy; also loads this harness's native
+  **DSH.md family** (`./DSH.md`, `./DSH.local.md`, subdirectory DSH.md (path index, read on demand) and
+  `@import`). DSH.md loads later and takes priority on conflicts.
 - **`/init` command**: Type `/init` to first pick the document language (中文 / English, via the DSH options
   selection UI), then submit the "analyze the codebase → create DSH.md" prompt to the current model, which
   explores the project and writes `DSH.md` (mirrors Claude Code's `/init` flow; the result is visible immediately).
@@ -95,8 +96,9 @@ A "🅒 Import Claude Code conversations" entry is added to the sidebar footer (
 ## Configuration & Extension
 
 - **Memory hierarchy**: CLAUDE family first, DSH family second (the latter wins); within a family
-  `local > project > user`, subdirectories > root; `@import` supports `@path` (relative to the referencing
-  file's directory), `@/path` (workspace root), `@~/path` (user home) — nestable, cycle-free, depth-bounded.
+  `local > project > user`; root memory is inlined in full, while subdirectory files are listed as a
+  path index (read on demand); `@import` supports `@path` (relative to the referencing file's directory),
+  `@/path` (workspace root), `@~/path` (user home) — nestable, cycle-free, depth-bounded.
 - **`/init`**: pick a language (中文 / English) → generates the "analyze the codebase and create DSH.md" prompt
   and submits it to the current model, which explores the project and writes `DSH.md` (suggests improvements
   if one already exists).

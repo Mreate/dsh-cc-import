@@ -19,9 +19,10 @@
 ## 核心能力
 
 - **记忆加载（CLAUDE.md + DSH.md）**：按 [Claude Code 官方文档](https://code.claude.com/docs) 的
-  memory 层级注入 `~/.claude/CLAUDE.md`、`./CLAUDE.md`、`./CLAUDE.local.md`、子目录 CLAUDE.md 与
-  `@import` 引用；同时加载本 harness 原生的 **DSH.md 家族**（`./DSH.md`、`./DSH.local.md`、子目录
-  DSH.md 与 `@import`），DSH.md 后加载、冲突时优先级更高。
+  memory 层级注入 `~/.claude/CLAUDE.md`、`./CLAUDE.md`、`./CLAUDE.local.md`、子目录 CLAUDE.md
+  （路径索引、按需读）与 `@import` 引用；同时加载本 harness 原生的 **DSH.md 家族**
+  （`./DSH.md`、`./DSH.local.md`、子目录 DSH.md（路径索引、按需读）与 `@import`），
+  DSH.md 后加载、冲突时优先级更高。
 - **`/init` 命令**：输入 `/init` 先选择文档语言（中文 / English，DSH 选项选择 UI），
   再把「分析代码库 → 创建 DSH.md」的提示词提交给当前模型，由模型探索项目并写入
   `DSH.md`（参考 Claude Code 的 `/init` 流程；创建结果即时可见）。
@@ -92,9 +93,9 @@ dsh plugin --profile web add <本插件绝对路径>
 
 ## 配置与扩展
 
-- **记忆层级**：CLAUDE 家族在前、DSH 家族在后（后者优先）；家族内 `local > project > user`、
-  子目录 > 根目录；`@import` 支持 `@path`（相对引用文件所在目录）、`@/path`（工作区根）、
-  `@~/path`（用户主目录），可嵌套、去环、深度有界。
+- **记忆层级**：CLAUDE 家族在前、DSH 家族在后（后者优先）；家族内 `local > project > user`；
+  根目录记忆读入全文，子目录同名文件只列路径索引（按需 read）；`@import` 支持 `@path`
+  （相对引用文件所在目录）、`@/path`（工作区根）、`@~/path`（用户主目录），可嵌套、去环、深度有界。
 - **`/init`**：先选语言（中文 / English）→ 生成「分析代码库并创建 DSH.md」提示词并
   提交给当前模型，由模型探索项目写入 `DSH.md`（已存在则建议改进）。
 - **导入器扩展**：实现 `ImportProvider`（`discoverDataRoot` / `listSessions` / `previewSession` /
