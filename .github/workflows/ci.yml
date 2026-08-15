@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    name: Build (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 包声明支持 Node ^22.19 || >=24（见 package.json engines）。
+        node: ['22.19', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (host + client, tsdown)
+        run: pnpm run bundle
+
+      - name: Verify build artifacts
+        run: |
+          test -f lib/index.js
+          test -f lib/index.d.ts
+          test -f lib/client.cjs
+          test -f lib/client.d.cts
