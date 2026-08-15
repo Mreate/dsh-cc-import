@@ -1,17 +1,16 @@
-<p align="center">
-  <a href="README.md">简体中文</a> · <strong>English</strong>
-</p>
+# dsh-cc-import
+
+<a href="README.md">简体中文</a> · <strong>English</strong>
 
 <p align="center">
   <a href="https://github.com/Mreate/dsh-cc-import"><img alt="GitHub Repo" src="https://img.shields.io/badge/repo-dsh--cc--import-181717?style=flat-square&logo=github&logoColor=white"></a>
   <a href="https://github.com/Mreate/dsh-cc-import/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Mreate/dsh-cc-import?style=flat-square&logo=github"></a>
   <a href="https://github.com/Mreate/dsh-cc-import/forks"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/Mreate/dsh-cc-import?style=flat-square"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Mreate/dsh-cc-import/ci.yml?style=flat-square&label=CI"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-263146?style=flat-square"></a>
   <img alt="status" src="https://img.shields.io/badge/status-public%20beta-7da1de?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness%20Web-4b6fff?style=flat-square">
 </p>
-
-# dsh-cc-import
 
 > Migrate Claude Code memories and conversations into DeepSeek Harness (DSH): CLAUDE.md / DSH.md memory loading,
 > a one-shot `/init` that scaffolds a DSH.md, and high-fidelity import of Claude Code `.jsonl` conversations as

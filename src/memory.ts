@@ -13,6 +13,7 @@
  * local > project > user、子目录 > 根目录，后加载的更具体指令覆盖先前的冲突。
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { createHomeFinder } from './home'
 
 type FsService = any
 
@@ -136,14 +137,10 @@ export function createMemoryLoader(ctx: Context) {
   async function load(workspaceRoot?: string): Promise<string> {
     if (!fs) return ''
     const opts: MemoryLoaderOptions = { workspaceRoot, homeDir: undefined, maxImportDepth: 4, maxSubdirDepth: 4, maxFiles: 40 }
-    // Home discovery：认 .claude（CC）或 .dsh（本 harness）目录。
-    const homes: string[] = []
-    const SKIP_USER: Record<string, 1> = { Public: 1, Default: 1, 'Default User': 1, 'All Users': 1 }
-    async function isDir(p: string) { const s = await statPath(p); return !!(s && s.info.type === 'directory') }
-    async function probe(base: string, name?: string) { const h = name ? `${base}/${name}` : base; if (await isDir(`${h}/.claude`) || await isDir(`${h}/.dsh`)) homes.push(h) }
-    for (const e of await listDir('C:/Users')) { if (e.type === 'directory' && !SKIP_USER[e.name]) await probe('C:/Users', e.name) }
-    for (const base of ['/home', '/Users']) { for (const e of await listDir(base)) { if (e.type === 'directory') await probe(base, e.name) } }
-    opts.homeDir = homes[0]
+    // Home discovery：优先环境变量（USERPROFILE / HOME）定位当前用户主目录，
+    // 避免多用户机器上命中其他用户的目录；不可用时回退系统用户目录扫描
+    // （认 .claude（CC）或 .dsh（本 harness）marker）。
+    opts.homeDir = await createHomeFinder(ctx).find(['.claude', '.dsh'])
 
     const acc: MemoryFile[] = []
     const seen = new Set<string>()

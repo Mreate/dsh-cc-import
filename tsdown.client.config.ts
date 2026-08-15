@@ -10,6 +10,7 @@ export default defineConfig({
   outDir: 'lib',
   format: ['cjs'],
   fixedExtension: false,
+  dts: true,
   clean: false,
   banner: `window.__ModuleLoader__.load({\n  id: "${ID}",\n  factory: (require) => {\n    var module = { exports: {} };\n    var exports = module.exports;\n    Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n`,
   footer: `\n    return module.exports;\n  }\n});\n`,

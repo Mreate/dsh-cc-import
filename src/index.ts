@@ -30,16 +30,32 @@ export function apply(ctx: Context) {
 
   // ---- 1. CLAUDE.md memory (per-session-cwd cache) -------------------
   const memoryLoader = createMemoryLoader(ctx)
+  // 按会话 cwd 缓存记忆文本；设置上限 + LRU 淘汰，避免长期运行的 host 无限增长。
   const memoryCache = new Map<string, string>()
+  const MEMORY_CACHE_MAX = 64
   const loading = new Set<string>()
+  function trimMemoryCache() {
+    while (memoryCache.size > MEMORY_CACHE_MAX) {
+      const oldest = memoryCache.keys().next().value
+      if (oldest === undefined) break
+      memoryCache.delete(oldest)
+    }
+  }
   function memoryFor(cwd: string): string {
-    if (memoryCache.has(cwd)) return memoryCache.get(cwd)!
+    const hit = memoryCache.get(cwd)
+    if (hit !== undefined) {
+      // LRU：把命中项移到队尾（Map 迭代顺序即插入顺序）。
+      memoryCache.delete(cwd)
+      memoryCache.set(cwd, hit)
+      return hit
+    }
     if (!loading.has(cwd)) {
       loading.add(cwd)
       memoryLoader
         .load(cwd)
-        .then((t) => { memoryCache.set(cwd, t) })
-        .catch(() => { memoryCache.set(cwd, '') })
+        .then((t) => { memoryCache.set(cwd, t); trimMemoryCache() })
+        .catch(() => { memoryCache.set(cwd, ''); trimMemoryCache() })
+        .finally(() => { loading.delete(cwd) })
     }
     return ''
   }

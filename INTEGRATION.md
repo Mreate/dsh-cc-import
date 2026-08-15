@@ -1,6 +1,6 @@
 # cc-import 接入清单
 
-插件已编译通过（`tsdown` 产出 `lib/index.js` + `lib/client.js` + `.d.ts`）。
+插件已编译通过（`tsdown` 产出 `lib/index.js` + `lib/client.cjs` + `.d.ts`）。
 以下是在**全局安装的 DSH**（`npm install -g`，`$DSH_HOME=C:\Users\<you>\.dsh`）里
 安装、接线与端到端验证的步骤。
 
@@ -14,7 +14,7 @@
 ```bash
 cd E:\MessyProject\dsh-plugin\CCImport
 pnpm install          # 拉取 @deepseek-ai/* @0.1.0-rc.6 + tsdown@0.22
-pnpm run bundle       # tsdown → lib/index.js + lib/client.js + lib/*.d.ts
+pnpm run bundle       # tsdown → lib/index.js + lib/client.cjs + lib/*.d.ts
 ```
 
 ## 2. 安装到 profile

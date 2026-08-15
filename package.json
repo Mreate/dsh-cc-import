@@ -18,6 +18,7 @@
       "default": "./lib/index.js"
     },
     "./client": {
+      "types": "./lib/client.d.cts",
       "default": "./lib/client.cjs"
     },
     "./package.json": "./package.json"
@@ -43,6 +44,10 @@
     "prepublishOnly": "pnpm run bundle"
   },
   "license": "MIT",
+  "engines": {
+    "node": "^22.19 || >=24",
+    "pnpm": ">=10"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-fs": "^0.1.0-rc.6",

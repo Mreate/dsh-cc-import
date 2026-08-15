@@ -11,6 +11,7 @@
  * DSH monorepo.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { createHomeFinder } from '../home'
 import type { ImportedSessionSummary, ImportProvider, ImportResult } from './provider'
 
 type FsService = any
@@ -35,7 +36,26 @@ interface ParsedRecord {
   cwd?: string
 }
 
-const SKIP_USER_DIRS: Record<string, 1> = { Public: 1, Default: 1, 'Default User': 1, 'All Users': 1 }
+/**
+ * 按 sessionId 匹配会话：精确匹配优先（fileName / relPath / 去 .jsonl 的
+ * fileName），再放宽到 fileName 前缀与 relPath 尾缀（CC id 前缀用法）。
+ * 不做宽松子串匹配，避免 sessionId 命中无关路径。
+ */
+function matchSession(sessions: ImportedSessionSummary[], sessionId: string): ImportedSessionSummary | undefined {
+  const sid = (sessionId || '').trim()
+  if (!sid) return undefined
+  const byFile = sessions.find((s) => s.fileName === sid)
+  if (byFile) return byFile
+  const byRel = sessions.find((s) => s.relPath === sid)
+  if (byRel) return byRel
+  const byBase = sessions.find((s) => s.fileName.replace(/\.jsonl$/, '') === sid)
+  if (byBase) return byBase
+  const byPrefix = sessions.find((s) => s.fileName.startsWith(sid) && s.fileName.length > sid.length)
+  if (byPrefix) return byPrefix
+  const bySuffix = sessions.find((s) => s.relPath.endsWith(`/${sid}.jsonl`))
+  if (bySuffix) return bySuffix
+  return undefined
+}
 
 export function createClaudeCodeProvider(ctx: Context): ImportProvider {
   const fs = ctx.get('fs') as FsService | undefined
@@ -68,26 +88,11 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
       return []
     }
   }
-  async function isDir(path: string): Promise<boolean> {
-    const s = await statPath(path)
-    return !!(s && s.info.type === 'directory')
-  }
-
   async function discoverHome(): Promise<string | undefined> {
-    const homes: string[] = []
-    async function probe(base: string, name?: string) {
-      const h = name ? `${base}/${name}` : base
-      if (await isDir(`${h}/.claude`)) homes.push(h)
-    }
-    for (const e of await listDir('C:/Users')) {
-      if (e.type === 'directory' && !SKIP_USER_DIRS[e.name]) await probe('C:/Users', e.name)
-    }
-    for (const base of ['/home', '/Users']) {
-      for (const e of await listDir(base)) {
-        if (e.type === 'directory') await probe(base, e.name)
-      }
-    }
-    return homes.length ? `${homes[0]}/.claude` : undefined
+    // 优先环境变量（USERPROFILE / HOME）定位当前用户主目录，再回退系统用户
+    // 目录扫描（marker: .claude）；返回 .claude 数据目录本身。
+    const home = await createHomeFinder(ctx).find(['.claude'])
+    return home ? `${home}/.claude` : undefined
   }
 
   async function readHead(target: any, maxBytes = 16384): Promise<string> {
@@ -335,7 +340,7 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
   async function findSession(root: string, sessionId: string) {
     // Only main sessions (exclude sub-agent side-chain files).
     const sessions = (await scanSessions(root)).filter((s) => !s.relPath.includes('/subagents/'))
-    return sessions.find((s) => s.fileName === sessionId || s.relPath === sessionId || s.fileName.indexOf(sessionId) === 0 || s.relPath.indexOf(sessionId) !== -1)
+    return matchSession(sessions, sessionId)
   }
 
   return {
@@ -374,7 +379,7 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
       const root = await discoverHome()
       if (!root) return { ...empty, error: 'No ~/.claude directory found' }
       const all = await scanSessions(root)
-      const match = all.find((s) => !s.relPath.includes('/subagents/') && (s.fileName === sessionId || s.relPath === sessionId || s.fileName.indexOf(sessionId) === 0 || s.relPath.indexOf(sessionId) !== -1))
+      const match = matchSession(all.filter((s) => !s.relPath.includes('/subagents/')), sessionId)
       if (!match) return { ...empty, error: `Session not found: ${sessionId}` }
 
       /** 把会话附加到目标工作区（workspaceRegistry 归属）。 */
