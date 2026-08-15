@@ -128,6 +128,10 @@ turn/end {reason:{kind:'success'}}
 ### 5.3 高保真细节
 
 - **thinking → `reasoning` 块**：保留原文。
+- **连续 assistant 记录合并**：CC 会把一次模型回复拆成多条 assistant 记录（thinking、text、多个
+  tool_use 分条发送）；合成时把**连续**出现的 assistant 记录合并为一条 `assistant/message`
+  （内容块按序拼接）。若不合并，连续多条带 tool-call 的 assistant 消息会让 provider 拒绝请求
+  （OpenAI/DeepSeek：assistant(tool_calls) 后必须紧跟响应其全部 id 的 tool 消息）。
 - **tool_use → `tool-call` 块 + `tool/call` 事件**：`arguments = JSON.stringify(input)`，`callId` 沿用 CC 的 tool_use `id`。
 - **附件（image）**：CC user 消息的 image 块 → 保存到 `ctx.attachments`，产出 `{type:'image', attachment}` 块；无法还原的降级为文本占位。
 - **子代理树**：`~/.claude/projects/<proj>/<sid>/subagents/*.jsonl` → 独立子会话，`SessionHeader.parentSession` 指向父会话、

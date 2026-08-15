@@ -262,7 +262,13 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
     function closeStep(t: number) { if (stepOpen) { stepOpen = false; emit('step/end', { turn, step }, t) } }
     function closeTurn(t: number) { closeStep(t); if (turnOpen) { turnOpen = false; emit('turn/end', { turn, reason: { kind: 'success' } }, t) } }
 
-    for (const r of records) {
+    // CC 会把一次模型回复拆成多条 assistant 记录（thinking、text、多个
+    // tool_use 分条发送）。若逐条生成 assistant/message，连续多条带
+    // tool-call 的消息会让 provider 拒绝请求（OpenAI/DeepSeek 要求
+    // assistant(tool_calls) 后必须紧跟响应其全部 id 的 tool 消息）。
+    // 因此把连续出现的 assistant 记录合并为一条 assistant/message。
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i]
       const t = r.time
       if (r.role === 'user') {
         if (r.blocks.some((b) => b.kind === 'tool_result')) {
@@ -292,21 +298,31 @@ export function createClaudeCodeProvider(ctx: Context): ImportProvider {
         openStep(t)
       } else {
         if (!stepOpen) openStep(t)
+        // 合并连续 assistant 记录：一次模型回复 = 一条 assistant/message。
+        let end = i
+        while (end + 1 < records.length && records[end + 1].role === 'assistant') end++
         const content: any[] = []
         const toolUses: { id: string; name: string; args: string }[] = []
-        for (const b of r.blocks) {
-          if (b.kind === 'text') content.push({ type: 'text', text: b.text ?? '' })
-          else if (b.kind === 'reasoning') content.push({ type: 'reasoning', text: b.text ?? '' })
-          else if (b.kind === 'tool_use') {
-            let args = '{}'
-            try { args = JSON.stringify(b.input) } catch { args = '{}' }
-            const id = b.id || `call-${seq}`
-            content.push({ type: 'tool-call', id, name: b.name ?? 'tool', arguments: args })
-            toolUses.push({ id, name: b.name ?? 'tool', args })
+        let model: string | undefined
+        let usage: { inputTokens: number; outputTokens: number } | undefined
+        for (let k = i; k <= end; k++) {
+          for (const b of records[k].blocks) {
+            if (b.kind === 'text') content.push({ type: 'text', text: b.text ?? '' })
+            else if (b.kind === 'reasoning') content.push({ type: 'reasoning', text: b.text ?? '' })
+            else if (b.kind === 'tool_use') {
+              let args = '{}'
+              try { args = JSON.stringify(b.input) } catch { args = '{}' }
+              const id = b.id || `call-${seq}`
+              content.push({ type: 'tool-call', id, name: b.name ?? 'tool', arguments: args })
+              toolUses.push({ id, name: b.name ?? 'tool', args })
+            }
           }
+          if (records[k].model) model = records[k].model
+          if (records[k].usage) usage = records[k].usage
         }
-        const data: any = { turn, step, message: { id: `ccmsg-${seq + 1000}`, role: 'assistant', content, source: { kind: 'model', provider: 'claude-code', model: r.model || 'unknown' } } }
-        if (r.usage) data.usage = r.usage
+        i = end
+        const data: any = { turn, step, message: { id: `ccmsg-${seq + 1000}`, role: 'assistant', content, source: { kind: 'model', provider: 'claude-code', model: model || 'unknown' } } }
+        if (usage) data.usage = usage
         emit('assistant/message', data, t, true)
         for (const tu of toolUses) emit('tool/call', { turn, step, callId: tu.id, name: tu.name, arguments: tu.args }, t)
         if (toolUses.length === 0) { closeStep(t); closeTurn(t) }
