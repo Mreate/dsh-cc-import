@@ -1,15 +1,17 @@
 <p align="center">
-  <strong>简体中文</strong>
+  <strong>简体中文</strong> · <a href="README.en.md">English</a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/cc-import"><img alt="npm" src="https://img.shields.io/npm/v/cc-import?style=flat-square&color=4b6fff"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import"><img alt="GitHub Repo" src="https://img.shields.io/badge/repo-dsh--cc--import-181717?style=flat-square&logo=github&logoColor=white"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/stargazers"><img alt="GitHub Stars" src="https://img.shields.io/github/stars/Mreate/dsh-cc-import?style=flat-square&logo=github"></a>
+  <a href="https://github.com/Mreate/dsh-cc-import/forks"><img alt="GitHub Forks" src="https://img.shields.io/github/forks/Mreate/dsh-cc-import?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-263146?style=flat-square"></a>
   <img alt="status" src="https://img.shields.io/badge/status-public%20beta-7da1de?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness%20Web-4b6fff?style=flat-square">
 </p>
 
-# cc-import
+# dsh-cc-import
 
 > 把 Claude Code 的记忆与对话迁移进 DeepSeek Harness（DSH）：CLAUDE.md / DSH.md 记忆加载、
 > `/init` 一键生成 DSH.md、Claude Code `.jsonl` 对话高保真导入为**可回溯、可 resume 的 DSH 会话**。
