@@ -2,10 +2,11 @@
  * cc-import — host half entry.
  *
  * Loaded by a composition row `{ id: cc-import, name: 'cc-import' }`.
- * Composes the CLAUDE.md + DSH.md memory loader, the Claude Code import
- * provider, and the `/init` command that scaffolds a DSH.md; registers
- * model-facing tools so the import is also drivable from the model (the
- * client UI uses RPC added in the UI milestone).
+ * Composes the CLAUDE.md + DSH.md memory loader (as dynamic runtime context,
+ * NOT a system-prompt section), the Claude Code import provider, and the
+ * `/init` command that scaffolds a DSH.md; registers model-facing tools so
+ * the import is also drivable from the model (the client UI uses RPC added in
+ * the UI milestone).
  */
 import { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -18,7 +19,7 @@ import { registerRpcRoutes } from './rpc'
 export const name = 'cc-import'
 export const inject = ['systemPrompt', 'sandboxPolicy', 'tools', 'webServer'] as const
 
-const MEMORY_SECTION_ORDER = 50
+const MEMORY_CONTEXT_ORDER = 50
 
 export function apply(ctx: Context) {
   // Session cwd (the real project root for CLAUDE.md) must be resolved per
@@ -59,9 +60,14 @@ export function apply(ctx: Context) {
     }
     return ''
   }
-  ctx.systemPrompt.section({
+  // 记忆文件用 `context()` 注入，而不是 `section()`：`section()` 把内容拼进
+  // 系统提示词（角色/工具定义区），而 CLAUDE.md/DSH.md 是「项目/任务知识」，
+  // 属于用户消息层。`context()` 正好贡献有序动态上下文，随附循环成为带来源的
+  // user-role 快照，与系统提示词分离——避免污染系统提示词缓存、稀释其权威性，
+  // 且每次组装按会话 cwd 重新求值，切换项目/分支后新快照自然取代旧快照。
+  ctx.systemPrompt.context({
     name: 'cc-import:memory',
-    order: MEMORY_SECTION_ORDER,
+    order: MEMORY_CONTEXT_ORDER,
     text: (assembleCtx: any) => {
       const cwd: string | undefined =
         assembleCtx?.scope?.session?.header?.cwd ??

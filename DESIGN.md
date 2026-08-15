@@ -21,7 +21,7 @@
 │  cc-import（单包，双半）                                      │
 │                                                              │
 │  Host 半（lib/index.js，composition 行加载）                    │
-│   ├─ MemoryLoader   CLAUDE.md + DSH.md 扫描/优先级/@import → systemPrompt.section │
+│   ├─ MemoryLoader   CLAUDE.md + DSH.md 扫描/优先级/@import → systemPrompt.context │
 │   ├─ InitCommand    /init：语言选择 → 分析提示词 → agent.followup 生成 DSH.md │
 │   ├─ ImportService  CC JSONL → DSH SessionEvent 序列          │
 │   │      └─ ImportProvider 抽象（claude-code 为第一个实现）      │
@@ -79,7 +79,10 @@ cc-import/
 | imports | `@path` / `@/path` / `@~/path` | 内联引用，可嵌套、去环 |
 
 **实现要点**：
-- 注入点：`systemPrompt.section({ name: 'cc-import:memory', order: 50, text })`。
+- 注入点：`systemPrompt.context({ name: 'cc-import:memory', order: 50, text })`。
+  记忆是「项目/任务知识」，属于用户消息层而非系统提示词（角色/工具定义）层；
+  `context()` 随附循环成为带来源的 user-role runtime-context 快照，与系统提示词
+  分离（不污染系统提示词 KV 缓存、不稀释其权威性，切换 cwd 后新快照取代旧快照）。
 - **CLAUDE 家族在前、DSH 家族在后**（DSH.md 是本 harness 原生记忆，`/init` 生成，冲突时覆盖 CLAUDE.md）；
   家族内 `local > project > user`、子目录 > 根目录。
 - 全局 + project + local 在 session 启动时读入；subdir 采用「按需」策略：随 `fs/observed` 或工作区扫描有界加载

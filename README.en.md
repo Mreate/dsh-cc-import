@@ -111,7 +111,7 @@ A "🅒 Import Claude Code conversations" entry is added to the sidebar footer (
 dsh profile
   -> dsh-base + dsh-web-app
   -> cc-import Cordis patch
-  -> systemPrompt.section (CLAUDE.md + DSH.md memory)
+  -> systemPrompt.context (CLAUDE.md + DSH.md memory as user-role runtime-context snapshot)
   -> /init command (language pick → userQuestions → agent.followup → model writes DSH.md)
   -> sidebar footer button + shell.overlay (client half)
   -> /api/cc-import RPC (webServer HTTP routes)

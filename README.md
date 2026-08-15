@@ -108,7 +108,7 @@ dsh plugin --profile web add <本插件绝对路径>
 dsh profile
   -> dsh-base + dsh-web-app
   -> cc-import Cordis patch
-  -> systemPrompt.section（CLAUDE.md + DSH.md 记忆）
+  -> systemPrompt.context（CLAUDE.md + DSH.md 记忆，user-role 运行时上下文快照）
   -> /init 命令（语言选择 → userQuestions → agent.followup → 模型分析生成 DSH.md）
   -> 侧边栏 footer 按钮 + shell.overlay 浮层（客户端半）
   -> /api/cc-import RPC（webServer HTTP 路由）
